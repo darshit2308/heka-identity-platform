@@ -1,9 +1,12 @@
+import { JwaSignatureAlgorithm, SdJwtVcRecord } from '@credo-ts/core'
+import { OpenId4VciResolvedCredentialOffer } from '@credo-ts/openid4vc'
+import { getHostNameFromUrl } from '@heka-wallet/shared'
 import { renderHook } from '@testing-library/react-native'
+
 import { mockFunction } from '../../../jest-helpers/helpers'
 import { useOpenIdHandlers } from '../../src/credentials/useOpenIdHandlers'
+
 import { hekaIdentityServiceSdJwtVc } from './fixtures'
-import { JwaSignatureAlgorithm, SdJwtVcRecord } from '@credo-ts/core'
-import { getHostNameFromUrl } from '@heka-wallet/shared'
 
 const mockPublicDid = 'did:key:mock-key-fingerprint'
 const mockAuthorizationCode = 'mock-auth-code'
@@ -38,16 +41,16 @@ function renderOpenIdHandlersHookValue() {
 
 describe('useOpenIdHandlers', () => {
   const fixture = hekaIdentityServiceSdJwtVc
-  const mixedFormatResolvedCredentialOffer = {
+
+  const unsupportedOfferedCredential = {
+    id: 'unsupported-first-id',
+    format: 'jwt_vc' as const,
+    vct: 'empl:unsupported',
+  } as unknown as OpenId4VciResolvedCredentialOffer['offeredCredentials'][number]
+
+  const mixedFormatResolvedCredentialOffer: OpenId4VciResolvedCredentialOffer = {
     ...fixture.resolvedCredentialOfferPreAuth,
-    offeredCredentials: [
-      {
-        id: 'unsupported-first-id',
-        format: 'jwt_vc',
-        vct: 'empl:unsupported',
-      },
-      fixture.resolvedCredentialOfferPreAuth.offeredCredentials[0],
-    ],
+    offeredCredentials: [unsupportedOfferedCredential, fixture.resolvedCredentialOfferPreAuth.offeredCredentials[0]],
   }
 
   describe('resolveOpenId4VciOffer', () => {
@@ -253,9 +256,15 @@ describe('useOpenIdHandlers', () => {
     })
 
     it('should throw if no offered credentials use a supported format', async () => {
-      const unsupportedOnlyResolvedCredentialOffer = {
+      const unsupportedOnlyResolvedCredentialOffer: OpenId4VciResolvedCredentialOffer = {
         ...fixture.resolvedCredentialOfferPreAuth,
-        offeredCredentials: [{ id: 'unsupported-only-id', format: 'jwt_vc', vct: 'empl:unsupported-only' }],
+        offeredCredentials: [
+          {
+            id: 'unsupported-only-id',
+            format: 'jwt_vc' as const,
+            vct: 'empl:unsupported-only',
+          } as unknown as OpenId4VciResolvedCredentialOffer['offeredCredentials'][number],
+        ],
       }
 
       const { receiveCredentialFromOpenId4VciOffer } = renderOpenIdHandlersHookValue()
