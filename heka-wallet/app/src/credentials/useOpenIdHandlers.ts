@@ -30,10 +30,15 @@ import { extractOpenId4VcCredentialMetadata, setOpenId4VcCredentialMetadata } fr
 import { OpenId4VcPresentationRequest } from './types'
 
 // Credential formats supported by the wallet
-const WALLET_SUPPORTED_CREDENTIAL_FORMATS = ['vc+sd-jwt', 'jwt_vc_json', 'jwt_vc_json-ld', 'mso_mdoc'] as const
+const WALLET_SUPPORTED_CREDENTIAL_FORMATS: ReadonlyArray<string> = [
+  OpenId4VciCredentialFormatProfile.SdJwtVc,
+  OpenId4VciCredentialFormatProfile.JwtVcJson,
+  OpenId4VciCredentialFormatProfile.JwtVcJsonLd,
+  OpenId4VciCredentialFormatProfile.MsoMdoc,
+]
 
 const walletSupportsCredentialFormat = (format?: string) =>
-  format !== undefined && WALLET_SUPPORTED_CREDENTIAL_FORMATS.some((supportedFormat) => supportedFormat === format)
+  format !== undefined && WALLET_SUPPORTED_CREDENTIAL_FORMATS.includes(format)
 
 const formatOfferedCredentialDescriptions = (
   offeredCredentials: OpenId4VciResolvedCredentialOffer['offeredCredentials']
