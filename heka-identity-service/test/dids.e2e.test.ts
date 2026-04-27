@@ -35,7 +35,10 @@ describe('E2E public DIDs creation', () => {
     // Give AFJ event listeners some time to process pending events
     await sleep(4000)
 
-    await nestApp.close()
+    if (nestApp) {
+      await nestApp.close()
+    }
+    await ormSchemaGenerator.clearDatabase()
   })
 
   afterAll(async () => {

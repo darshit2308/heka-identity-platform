@@ -34,7 +34,10 @@ describe('E2E wallet scope', () => {
     // Give AFJ event listeners some time to process pending events
     await sleep(2000)
 
-    await nestApp.close()
+    if (nestApp) {
+      await nestApp.close()
+    }
+    await ormSchemaGenerator.clearDatabase()
   })
 
   afterAll(async () => {

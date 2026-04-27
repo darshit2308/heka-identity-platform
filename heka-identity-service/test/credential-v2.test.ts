@@ -59,7 +59,10 @@ describe('Credential V2 tests', () => {
   })
 
   afterEach(async () => {
-    await nestApp.close()
+    if (nestApp) {
+      await nestApp.close()
+    }
+    await ormSchemaGenerator.clearDatabase()
   })
 
   const prepareSchemaAndIssuanceTemplate = async (
