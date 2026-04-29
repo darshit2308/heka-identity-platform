@@ -30,6 +30,10 @@ describe('E2E wallet scope', () => {
   })
 
   afterEach(async () => {
+    await ormSchemaGenerator.clearDatabase()
+  })
+
+  afterAll(async () => {
     // TODO: Find a way to explicitly await the required condition
     // Give AFJ event listeners some time to process pending events
     await sleep(2000)
@@ -37,10 +41,6 @@ describe('E2E wallet scope', () => {
     if (nestApp) {
       await nestApp.close()
     }
-    await ormSchemaGenerator.clearDatabase()
-  })
-
-  afterAll(async () => {
     await ormSchemaGenerator.clearDatabase()
   })
 
