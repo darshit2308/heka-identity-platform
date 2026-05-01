@@ -82,7 +82,7 @@ export class PrepareWalletService {
               }
             }
           } else {
-            this.logger.error(`Failed to create DID for method ${method}: ${(error as Error).message}`)
+            logger.error(`Failed to create DID for method ${method}: ${(error as Error).message}`)
           }
           continue
         }
@@ -94,7 +94,7 @@ export class PrepareWalletService {
           })
           await this.openId4VcVerifierService.createVerifier(tenantAgent, { publicVerifierId: did })
         } catch (error) {
-          this.logger.error(`Failed to initialize OID4VC records for DID ${did}`)
+          logger.error(`Failed to initialize OID4VC records for DID ${did}`)
         }
       }
 

@@ -41,7 +41,7 @@ describe('E2E wallet scope', () => {
     await ormSchemaGenerator.clearDatabase()
   })
 
-  test('users with Admin role share administartion wallet', async () => {
+  test('users with Admin role share administration wallet', async () => {
     const orgId = uuid()
 
     const firstAdminId = uuid()
@@ -84,7 +84,7 @@ describe('E2E wallet scope', () => {
     expect(await getOwnDidsCount(userAuthToken)).toBe(0)
   })
 
-  test('organization administrartion users share organization wallet', async () => {
+  test('organization administration users share organization wallet', async () => {
     const bigOrgId = uuid()
     const smallOrgId = uuid()
 
