@@ -31,17 +31,14 @@ describe('E2E public DIDs creation', () => {
   })
 
   afterEach(async () => {
-    await ormSchemaGenerator.clearDatabase()
-  })
-
-  afterAll(async () => {
     // TODO: Find a way to explicitly await the required condition
     // Give AFJ event listeners some time to process pending events
     await sleep(4000)
 
-    if (nestApp) {
-      await nestApp.close()
-    }
+    await nestApp.close()
+  })
+
+  afterAll(async () => {
     await ormSchemaGenerator.clearDatabase()
   })
 
