@@ -5,26 +5,26 @@
  * (Hedera SDK, mock, cache-backed, etc.) without coupling this utility to a specific
  * network client.
  */
-export type DidResolverFn = (did: string) => Promise<DidDocument | null>;
+export type DidResolverFn = (did: string) => Promise<DidDocument | null>
 
 /**
  * Minimal shape of a W3C DID Document.
  * Extended as needed when additional properties become relevant.
  */
 export interface DidDocument {
-  id: string;
-  verificationMethod?: VerificationMethod[];
-  authentication?: (string | VerificationMethod)[];
-  assertionMethod?: (string | VerificationMethod)[];
-  [key: string]: unknown;
+  id: string
+  verificationMethod?: VerificationMethod[]
+  authentication?: (string | VerificationMethod)[]
+  assertionMethod?: (string | VerificationMethod)[]
+  [key: string]: unknown
 }
 
 export interface VerificationMethod {
-  id: string;
-  type: string;
-  controller: string;
-  publicKeyMultibase?: string;
-  publicKeyJwk?: Record<string, unknown>;
+  id: string
+  type: string
+  controller: string
+  publicKeyMultibase?: string
+  publicKeyJwk?: Record<string, unknown>
 }
 
 /**
@@ -40,13 +40,18 @@ export interface VerificationMethod {
  * @throws          If the resolver returns null or itself throws
  */
 export async function resolveDidDocument(did: string, resolver: DidResolverFn): Promise<DidDocument> {
-  const document = await resolver(did);
+  const document = await resolver(did)
 
   if (!document) {
-    throw new Error(`DID resolution failed: document not found for ${did}`);
+    throw new Error(`DID resolution failed: document not found for ${did}`)
   }
 
-  return document;
+  // Guard against cache/fallback misrouting: the resolved document must belong to the requested DID
+  if (document.id !== did) {
+    throw new Error(`DID resolution mismatch: requested ${did} but resolver returned ${document.id}`)
+  }
+
+  return document
 }
 
 /**
@@ -58,27 +63,28 @@ export async function resolveDidDocument(did: string, resolver: DidResolverFn): 
  * as long as the key `id` fragment is stable.
  *
  * @param didDocument     The resolved DID Document
- * @param expectedPurpose A string fragment expected to appear in the key's `id`
+ * @param expectedPurpose The exact key purpose fragment after the `#` in the key ID
  *                        (e.g. "assertion-key", "authentication-key")
  * @returns               The matched VerificationMethod
  * @throws                If the document is malformed or no key matches the purpose
  */
 export function getDeterministicSigningKey(
   didDocument: Pick<DidDocument, 'verificationMethod'>,
-  expectedPurpose: string
+  expectedPurpose: string,
 ): VerificationMethod {
   if (!didDocument || !Array.isArray(didDocument.verificationMethod)) {
-    throw new Error('Malformed DID Document');
+    throw new Error('Malformed DID Document')
   }
 
-  // Match by key type AND purpose fragment in the key ID — never by array index
-  const targetKey = didDocument.verificationMethod.find(
-    (method) => method.type === 'Ed25519VerificationKey2020' && method.id.includes(expectedPurpose)
-  );
+  // Match by key type AND exact purpose fragment after '#' — never by array index or substring
+  const targetKey = didDocument.verificationMethod.find((method) => {
+    const fragment = method.id.split('#')[1]
+    return method.type === 'Ed25519VerificationKey2020' && fragment === expectedPurpose
+  })
 
   if (!targetKey) {
-    throw new Error(`No deterministic key found for purpose: ${expectedPurpose}`);
+    throw new Error(`No deterministic key found for purpose: ${expectedPurpose}`)
   }
 
-  return targetKey;
+  return targetKey
 }
