@@ -15,7 +15,7 @@ describe('GithubContributorCredential Schema Validation', () => {
 
   beforeAll(() => {
     schema = loadFixture('github-contributor-credential.schema.json')
-    mockPayload = loadFixture('mock-sd-jwt-payload.json')
+    mockPayload = loadFixture('mock-issuer-payload.json')
     validate = ajv.compile(schema)
   })
 
@@ -45,5 +45,46 @@ describe('GithubContributorCredential Schema Validation', () => {
       githubUsername: 'darshit2308',
     }
     expect(validate(incompleteSubject)).toBe(false)
+  })
+
+  it('should reject an id that does not match the did:hedera pattern', () => {
+    const subject = {
+      id: 'not-a-did',
+      githubUsername: 'darshit2308',
+      githubAccountId: 4115704,
+      gpgFingerprint: '3AA5C34371567BD2',
+    }
+    expect(validate(subject)).toBe(false)
+  })
+
+  it('should reject an empty githubUsername (minLength: 1)', () => {
+    const subject = {
+      id: 'did:hedera:testnet:z6MkqExampleDeveloperDID',
+      githubUsername: '',
+      githubAccountId: 4115704,
+      gpgFingerprint: '3AA5C34371567BD2',
+    }
+    expect(validate(subject)).toBe(false)
+  })
+
+  it('should reject a gpgFingerprint that does not match the hex pattern', () => {
+    const subject = {
+      id: 'did:hedera:testnet:z6MkqExampleDeveloperDID',
+      githubUsername: 'darshit2308',
+      githubAccountId: 4115704,
+      gpgFingerprint: 'not-a-hex-fingerprint',
+    }
+    expect(validate(subject)).toBe(false)
+  })
+
+  it('should reject additional properties not in the schema', () => {
+    const subject = {
+      id: 'did:hedera:testnet:z6MkqExampleDeveloperDID',
+      githubUsername: 'darshit2308',
+      githubAccountId: 4115704,
+      gpgFingerprint: '3AA5C34371567BD2',
+      extraField: 'should-not-be-here',
+    }
+    expect(validate(subject)).toBe(false)
   })
 })

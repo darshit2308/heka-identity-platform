@@ -148,11 +148,10 @@ array is ordered in any given version of the DID Document.
 
 ## References
 
-- [JSON Schema for GithubContributorCredential](../src/credentials/fixtures/github-contributor-credential.schema.json)
-- [Mock SD-JWT Payload Fixture](../src/credentials/fixtures/mock-sd-jwt-payload.json)
-- [Deterministic Key Selector Implementation](../src/did/did-utils.ts)
-- [Deterministic Key Selector Tests](../src/did/__tests__/did-utils.test.ts)
-- [Hedera Testnet Spike](../src/credentials/did-hedera-spike.ts)
+- [JSON Schema for GithubContributorCredential](../../src/credentials/fixtures/github-contributor-credential.schema.json)
+- [Mock Issuer Payload Fixture](../../src/credentials/fixtures/mock-issuer-payload.json)
+- [Deterministic Key Selector Implementation](../../src/did/did-utils.ts)
+- [Deterministic Key Selector Tests](../../src/did/__tests__/did-utils.test.ts)
 - [Heka Hedera Documentation](./hedera.md)
 - [SD-JWT VC Issuance Guide](./how-to-issue-sd-jwt-vc.md)
 - [IETF SD-JWT Specification](https://www.ietf.org/archive/id/draft-ietf-oauth-selective-disclosure-jwt-13.html)
