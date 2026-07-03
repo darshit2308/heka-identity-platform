@@ -117,25 +117,26 @@ the signing key by array index (e.g., `verificationMethod[0]`). This is fragile 
 
 ### Solution
 
-The `getDeterministicSigningKey` utility (`src/did/did-utils.ts`) selects a key by
+Credo provides a built-in `dereferenceKey` method on `DidDocument` that selects a key by
 matching **both the key type and a purpose identifier in the key's `id` fragment**.
 
 ```typescript
-// Correct ✅ — deterministic, purpose-based selection
-getDeterministicSigningKey(didDocument, "assertion-key");
+// Correct ✅ — deterministic, purpose-based selection via Credo
+didDocument.dereferenceKey('#assertion-key', ['assertionMethod']);
 
 // Wrong ❌ — breaks when DID Document is updated
 didDocument.verificationMethod[0];
 ```
 
-This ensures that signing operations are stable regardless of how the `verificationMethod`
-array is ordered in any given version of the DID Document.
+Using types and API provided by Credo is the preferred option for any Credo-based app
+such as Heka Identity Service. This ensures that signing operations are stable regardless
+of how the `verificationMethod` array is ordered in any given version of the DID Document.
 
 ---
 
 ## Consequences
 
-- All credential signing in Heka **must** use `getDeterministicSigningKey` rather than
+- All credential signing in Heka **must** use Credo's `dereferenceKey` method rather than
   direct array indexing.
 - Future DID Document updates that add new verification methods will not break existing
   signing code.
@@ -149,9 +150,7 @@ array is ordered in any given version of the DID Document.
 ## References
 
 - [JSON Schema for GithubContributorCredential](../../src/credentials/fixtures/github-contributor-credential.schema.json)
-- [Mock Issuer Payload Fixture](../../src/credentials/fixtures/mock-issuer-payload.json)
-- [Deterministic Key Selector Implementation](../../src/did/did-utils.ts)
-- [Deterministic Key Selector Tests](../../src/did/__tests__/did-utils.test.ts)
+- [Mock SD-JWT Payload Fixture](../../src/credentials/fixtures/mock-sd-jwt-payload.json)
 - [Heka Hedera Documentation](./hedera.md)
 - [SD-JWT VC Issuance Guide](./how-to-issue-sd-jwt-vc.md)
 - [IETF SD-JWT Specification](https://www.ietf.org/archive/id/draft-ietf-oauth-selective-disclosure-jwt-13.html)
