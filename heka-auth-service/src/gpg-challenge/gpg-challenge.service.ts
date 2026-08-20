@@ -31,6 +31,18 @@ const CHALLENGE_TTL_MINUTES = 5
 const GITHUB_REQUEST_TIMEOUT_MS = 8_000
 
 /**
+ * GitHub username validation pattern.
+ *
+ * GitHub usernames are 1–39 characters: alphanumeric or single hyphens,
+ * cannot start or end with a hyphen.
+ * Used to validate contributor-supplied values before they are interpolated
+ * into outbound URLs to prevent SSRF via path traversal.
+ *
+ * @see https://docs.github.com/en/github/setting-up-and-managing-your-github-profile/personalizing-your-profile/about-your-profile
+ */
+const GITHUB_USERNAME_PATTERN = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/
+
+/**
  * Describes a successfully verified challenge, returned to the controller
  * so it can compose a consistent HTTP response.
  */
@@ -186,11 +198,24 @@ export class GpgChallengeService {
       )
     }
 
-    // --- Burn-before-verify ---
-    // Mark consumed immediately and persist before touching the network.
-    // This prevents any form of replay attack even if we crash below.
-    challenge.consumed = true
-    await this.challengeRepo.getEntityManager().flush()
+    // --- Burn-before-verify (atomic) ---
+    // Use a single UPDATE ... WHERE consumed = false to atomically claim the
+    // challenge. This prevents two concurrent verify requests from both passing
+    // the consumed = false guard and proceeding to signature verification.
+    const em = this.challengeRepo.getEntityManager()
+    const updated = await em.nativeUpdate(
+      GpgChallenge,
+      { id: challengeId, consumed: false },
+      { consumed: true },
+    )
+    if (updated === 0) {
+      // Another concurrent request consumed it between our findOne and here.
+      throw new BadRequestException(
+        'Replay attack detected: this challenge has already been consumed. Request a new challenge to try again.',
+      )
+    }
+    // Refresh local entity to reflect the DB state.
+    await em.refresh(challenge)
     this.logger.log(`Challenge ${challengeId} consumed for @${challenge.githubUsername}`)
 
     // --- Fetch public key from GitHub ---
@@ -283,6 +308,13 @@ export class GpgChallengeService {
    * @throws {ServiceUnavailableException} Network-level failure.
    */
   private async fetchGithubGpgKey(githubUsername: string): Promise<string> {
+    if (!GITHUB_USERNAME_PATTERN.test(githubUsername)) {
+      throw new BadRequestException(
+        `Invalid GitHub username format: '${githubUsername}'. ` +
+          'Usernames may only contain alphanumeric characters and hyphens.',
+      )
+    }
+
     const url = `https://github.com/${githubUsername}.gpg`
 
     let armoredKeys: string
@@ -388,7 +420,9 @@ export class GpgChallengeService {
     // and submit it to challenge B.
     const signedText = signedMessage.getText().trim()
     if (signedText !== expectedNonce) {
-      this.logger.warn(`Cross-challenge reuse attempt: signed "${signedText}" but expected "${expectedNonce}"`)
+      // Do not log the signedText value — it is caller-controlled and may contain
+      // sensitive or malicious content that would pollute logs.
+      this.logger.warn(`Cross-challenge reuse attempt detected for challenge (expected nonce did not match signed content)`)
       return { isValid: false }
     }
 

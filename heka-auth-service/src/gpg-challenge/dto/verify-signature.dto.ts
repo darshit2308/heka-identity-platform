@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { IsNotEmpty, IsString, IsUUID } from 'class-validator'
+import { IsNotEmpty, IsString, IsUUID, MaxLength } from 'class-validator'
 
 /**
  * Request body for `POST /gpg-challenge/verify`.
@@ -37,5 +37,6 @@ export class VerifySignatureDto {
   })
   @IsString()
   @IsNotEmpty({ message: 'signature must not be empty.' })
+  @MaxLength(65_536, { message: 'signature must not exceed 64 KiB.' })
   public signature!: string
 }

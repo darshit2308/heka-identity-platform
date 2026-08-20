@@ -18,23 +18,21 @@ import { GpgChallenge } from '../gpg-challenge.entity'
 import { GpgChallengeService } from '../gpg-challenge.service'
 import { ContributorOnboardingService } from '../../contributor-onboarding'
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+
 
 /**
  * Builds a fake GpgChallenge entity with sensible defaults.
  * Individual tests override only the fields they care about.
  */
 function buildChallenge(overrides: Partial<GpgChallenge> = {}): GpgChallenge {
-  const c = new GpgChallenge()
-  c.id = 'test-challenge-id'
-  c.githubUsername = 'test-contributor'
-  c.nonce = 'a'.repeat(64) // 64-char hex nonce
-  c.consumed = false
-  c.expiresAt = new Date(Date.now() + 5 * 60 * 1_000) // 5 minutes from now
-  c.createdAt = new Date()
-  return Object.assign(c, overrides)
+  const challenge = new GpgChallenge()
+  challenge.id = 'test-challenge-id'
+  challenge.githubUsername = 'test-contributor'
+  challenge.nonce = 'a'.repeat(64) // 64-char hex nonce
+  challenge.consumed = false
+  challenge.expiresAt = new Date(Date.now() + 5 * 60 * 1_000) // 5 minutes from now
+  challenge.createdAt = new Date()
+  return Object.assign(challenge, overrides)
 }
 
 /**
@@ -64,21 +62,26 @@ function axiosNetworkError(): AxiosError {
   return err
 }
 
-// ---------------------------------------------------------------------------
-// Test suite
-// ---------------------------------------------------------------------------
+
 
 describe('GpgChallengeService', () => {
   let service: GpgChallengeService
   let challengeRepo: ReturnType<typeof createMock<EntityRepository<GpgChallenge>>>
   let httpService: ReturnType<typeof createMock<HttpService>>
   let contributorOnboardingService: ReturnType<typeof createMock<ContributorOnboardingService>>
-  let entityManagerMock: { persist: ReturnType<typeof vi.fn>; flush: ReturnType<typeof vi.fn> }
+  let entityManagerMock: {
+    persist: ReturnType<typeof vi.fn>
+    flush: ReturnType<typeof vi.fn>
+    nativeUpdate: ReturnType<typeof vi.fn>
+    refresh: ReturnType<typeof vi.fn>
+  }
 
   beforeEach(() => {
     entityManagerMock = {
       persist: vi.fn().mockReturnThis(),
       flush: vi.fn().mockResolvedValue(undefined),
+      nativeUpdate: vi.fn().mockResolvedValue(1), // default: 1 row updated (consumed successfully)
+      refresh: vi.fn().mockResolvedValue(undefined),
     }
 
     challengeRepo = createMock<EntityRepository<GpgChallenge>>({
@@ -100,9 +103,7 @@ describe('GpgChallengeService', () => {
     service = new GpgChallengeService(challengeRepo, httpService, contributorOnboardingService)
   })
 
-  // -----------------------------------------------------------------------
-  // createChallenge
-  // -----------------------------------------------------------------------
+
 
   describe('createChallenge', () => {
     it('persists a challenge with a 64-character hex nonce', async () => {
@@ -151,9 +152,7 @@ describe('GpgChallengeService', () => {
     })
   })
 
-  // -----------------------------------------------------------------------
-  // verifySignature guard failures (no network calls needed)
-  // -----------------------------------------------------------------------
+
 
   describe('verifySignature guard failures', () => {
     it('throws NotFoundException for an unknown challengeId', async () => {
@@ -179,29 +178,40 @@ describe('GpgChallengeService', () => {
     })
   })
 
-  // -----------------------------------------------------------------------
-  // verifySignature burn-before-verify ordering
-  // -----------------------------------------------------------------------
+
 
   describe('verifySignature burn-before-verify ordering', () => {
-    it('marks the challenge consumed and flushes BEFORE making any GitHub API call', async () => {
+    it('atomically claims the challenge via nativeUpdate BEFORE making any GitHub API call', async () => {
       const challenge = buildChallenge()
       vi.mocked(challengeRepo.findOne).mockResolvedValue(challenge)
 
-      // GitHub call will fail immediately; we only care about what happens before it.
+      // nativeUpdate returns 1 (row claimed). GitHub call will fail; we only care what happens before it.
+      entityManagerMock.nativeUpdate.mockResolvedValue(1)
       vi.mocked(httpService.get).mockImplementation(() => {
-        expect(challenge.consumed).toBe(true)
-        expect(entityManagerMock.flush).toHaveBeenCalledOnce()
+        expect(entityManagerMock.nativeUpdate).toHaveBeenCalledOnce()
+        expect(entityManagerMock.nativeUpdate).toHaveBeenCalledWith(
+          expect.anything(),
+          { id: 'test-challenge-id', consumed: false },
+          { consumed: true },
+        )
         return throwError(() => axiosErrorWithStatus(404))
       })
 
       await expect(service.verifySignature('test-challenge-id', 'sig')).rejects.toThrow(BadRequestException)
     })
+
+    it('throws BadRequestException when nativeUpdate returns 0 (concurrent consumption)', async () => {
+      const challenge = buildChallenge()
+      vi.mocked(challengeRepo.findOne).mockResolvedValue(challenge)
+      entityManagerMock.nativeUpdate.mockResolvedValue(0) // another request already consumed it
+
+      await expect(service.verifySignature('test-challenge-id', 'sig')).rejects.toThrow(
+        expect.objectContaining({ message: expect.stringContaining('already been consumed') }),
+      )
+    })
   })
 
-  // -----------------------------------------------------------------------
-  // verifySignature GitHub API failures
-  // -----------------------------------------------------------------------
+
 
   describe('verifySignature GitHub API failures', () => {
     beforeEach(() => {
