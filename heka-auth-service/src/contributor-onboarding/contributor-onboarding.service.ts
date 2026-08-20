@@ -4,6 +4,7 @@ import { EntityManager } from '@mikro-orm/core'
 import { HttpService } from '@nestjs/axios'
 import {
   BadRequestException,
+  HttpException,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -280,7 +281,7 @@ export class ContributorOnboardingService {
       metadata: { source: 'github-oauth' },
     })
     await em.flush()
-    this.logger.log(`Updated contributor binding for GitHub account ${binding.githubAccountId}`)
+    this.logger.log(`Contributor binding updated (id: ${binding.id})`)
 
     return binding
   }
@@ -371,7 +372,13 @@ export class ContributorOnboardingService {
         }),
       )
       return this.toGithubIdentity(response.data)
-    } catch {
+    } catch (error: unknown) {
+      // Rethrow HTTP exceptions (e.g. BadRequestException from toGithubIdentity when
+      // GitHub returns a payload without id/login) — do not collapse them into 503.
+      if (error instanceof HttpException) {
+        throw error
+      }
+      this.logger.warn(`GitHub user API request failed: ${error instanceof Error ? error.message : 'unknown error'}`)
       throw new ServiceUnavailableException('Unable to retrieve authenticated GitHub identity.')
     }
   }

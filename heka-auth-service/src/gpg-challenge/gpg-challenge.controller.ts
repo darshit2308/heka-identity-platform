@@ -15,6 +15,7 @@ import type { Request } from 'express'
 import { JwtService } from '@nestjs/jwt'
 
 import { BearerGuard, extractTokenFromRequest } from '../oauth/guards'
+import { ConfigService } from '@config'
 import type { AuthInfo } from '../contributor-onboarding/contributor-onboarding.types'
 
 import { VerifySignatureDto } from './dto'
@@ -45,6 +46,7 @@ export class GpgChallengeController {
   public constructor(
     private readonly gpgChallengeService: GpgChallengeService,
     private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -90,7 +92,11 @@ export class GpgChallengeController {
     githubAccountId: string
   }> {
     const token = extractTokenFromRequest(request as any)
-    const authInfo = this.jwtService.decode<AuthInfo>(token)
+    const authInfo = await this.jwtService.verifyAsync<AuthInfo>(token, {
+      secret: this.configService.jwtConfig.secret,
+      issuer: this.configService.jwtConfig.issuer,
+      audience: this.configService.jwtConfig.audience,
+    })
     const challenge = await this.gpgChallengeService.createChallengeForWallet(authInfo.walletId)
 
     return {
@@ -138,12 +144,27 @@ export class GpgChallengeController {
   @ApiNotFoundResponse({ description: 'Challenge ID not found.' })
   @ApiTooManyRequestsResponse({ description: 'GitHub API rate limit reached.' })
   @ApiServiceUnavailableResponse({ description: 'GitHub API is unreachable.' })
+  @ApiUnauthorizedResponse({ description: 'GitHub OAuth login is required to verify a challenge.' })
+  @ApiBearerAuth()
+  @UseGuards(BearerGuard)
   @Post('verify')
   @HttpCode(HttpStatus.OK)
   public async verifySignature(
+    @Req() request: Request,
     @Body() dto: VerifySignatureDto,
   ): Promise<{ verified: true; gpgFingerprint: string; message: string } | { verified: false; message: string }> {
-    const result: VerificationResult = await this.gpgChallengeService.verifySignature(dto.challengeId, dto.signature)
+    const token = extractTokenFromRequest(request as any)
+    const authInfo = await this.jwtService.verifyAsync<AuthInfo>(token, {
+      secret: this.configService.jwtConfig.secret,
+      issuer: this.configService.jwtConfig.issuer,
+      audience: this.configService.jwtConfig.audience,
+    })
+
+    const result: VerificationResult = await this.gpgChallengeService.verifySignature(
+      dto.challengeId,
+      dto.signature,
+      authInfo.walletId,
+    )
 
     if (result.verified) {
       return {

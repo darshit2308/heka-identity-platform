@@ -28,7 +28,8 @@ export class ContributorBinding extends CustomBaseEntity {
   @Property({ onCreate: () => new Date(), onUpdate: () => new Date(), type: 'Date' })
   public updatedAt: Date = new Date()
 
-  public constructor(props: Partial<ContributorBinding>) {
+  public constructor(props: Pick<ContributorBinding, 'githubAccountId' | 'githubUsername' | 'walletId'> &
+    Partial<Pick<ContributorBinding, 'gpgFingerprint' | 'verifiedAt'>>) {
     super()
     Object.assign(this, props)
   }

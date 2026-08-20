@@ -34,7 +34,8 @@ export class ContributorAuditEvent extends CustomBaseEntity {
   @Property({ onCreate: () => new Date(), type: 'Date' })
   public createdAt: Date = new Date()
 
-  public constructor(props: Partial<ContributorAuditEvent>) {
+  public constructor(props: Pick<ContributorAuditEvent, 'eventType'> &
+    Partial<Pick<ContributorAuditEvent, 'githubAccountId' | 'githubUsername' | 'walletId' | 'gpgFingerprint' | 'metadata'>>) {
     super()
     Object.assign(this, props)
   }
