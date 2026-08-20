@@ -1,5 +1,6 @@
 import { EntityManager } from '@mikro-orm/core'
 import { HttpService } from '@nestjs/axios'
+import { BadRequestException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { of } from 'rxjs'
 
