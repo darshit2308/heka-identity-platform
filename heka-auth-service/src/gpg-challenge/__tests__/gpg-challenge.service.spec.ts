@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
-import { createMock } from '@golevelup/ts-vitest'
 import { EntityRepository } from '@mikro-orm/postgresql'
 import { HttpService } from '@nestjs/axios'
 import {
@@ -14,9 +13,15 @@ import * as openpgp from 'openpgp'
 import { of, throwError } from 'rxjs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ConfigService } from '@config'
+
 import { GpgChallenge } from '../gpg-challenge.entity'
 import { GpgChallengeService } from '../gpg-challenge.service'
 import { ContributorOnboardingService } from '../../contributor-onboarding'
+
+function createMock<T extends object>(overrides: Partial<T> = {}): T {
+  return overrides as T
+}
 
 
 
@@ -69,6 +74,7 @@ describe('GpgChallengeService', () => {
   let challengeRepo: ReturnType<typeof createMock<EntityRepository<GpgChallenge>>>
   let httpService: ReturnType<typeof createMock<HttpService>>
   let contributorOnboardingService: ReturnType<typeof createMock<ContributorOnboardingService>>
+  let configService: ReturnType<typeof createMock<ConfigService>>
   let entityManagerMock: {
     persist: ReturnType<typeof vi.fn>
     flush: ReturnType<typeof vi.fn>
@@ -100,7 +106,14 @@ describe('GpgChallengeService', () => {
       recordProofRejected: vi.fn(),
     })
 
-    service = new GpgChallengeService(challengeRepo, httpService, contributorOnboardingService)
+    configService = createMock<ConfigService>({
+      githubConfig: {
+        usersApiUrl: 'https://api.github.com/users',
+        requestTimeoutMs: 8000,
+      } as any,
+    })
+
+    service = new GpgChallengeService(challengeRepo, httpService, contributorOnboardingService, configService)
   })
 
 
@@ -126,10 +139,11 @@ describe('GpgChallengeService', () => {
 
       await service.createChallenge({ githubUsername: 'test-contributor' })
 
-      const arg = vi.mocked(challengeRepo.create).mock.calls[0][0]
+      const arg = vi.mocked(challengeRepo.create).mock.calls[0][0] as Partial<GpgChallenge>
       const expectedExpiry = now + 5 * 60 * 1_000
-      expect(arg.expiresAt.getTime()).toBeGreaterThanOrEqual(expectedExpiry - 2_000)
-      expect(arg.expiresAt.getTime()).toBeLessThanOrEqual(expectedExpiry + 2_000)
+      expect(arg.expiresAt).toBeInstanceOf(Date)
+      expect(arg.expiresAt!.getTime()).toBeGreaterThanOrEqual(expectedExpiry - 2_000)
+      expect(arg.expiresAt!.getTime()).toBeLessThanOrEqual(expectedExpiry + 2_000)
     })
 
     it('creates a challenge with consumed defaulting to false', async () => {
@@ -272,12 +286,17 @@ describe('GpgChallengeService', () => {
   // -----------------------------------------------------------------------
 
   describe('verifySignature cryptographic failures', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
+      const keyPair = await openpgp.generateKey({
+        type: 'ecc',
+        curve: 'curve25519Legacy',
+        userIDs: [{ name: 'Test Key', email: 'test@example.com' }],
+      })
+
       vi.mocked(challengeRepo.findOne).mockResolvedValue(buildChallenge())
-      // Return a valid (but fake) armored key block so we reach openpgp
       vi.mocked(httpService.get).mockReturnValue(
         of({
-          data: '-----BEGIN PGP PUBLIC KEY BLOCK-----\nFAKE\n-----END PGP PUBLIC KEY BLOCK-----',
+          data: keyPair.publicKey,
           status: 200,
           statusText: 'OK',
           headers: {},
