@@ -17,7 +17,7 @@ import type { Request } from 'express'
 
 import type { AuthInfo } from '../contributor-onboarding/contributor-onboarding.types'
 import { BearerGuard, extractTokenFromRequest } from '../oauth/guards'
-import { VerifySignatureDto } from './dto'
+import { GetStatusParamsDto, VerifySignatureDto } from './dto'
 import { ContributorStatus, GpgChallengeService, VerificationResult } from './gpg-challenge.service'
 
 /**
@@ -222,7 +222,7 @@ export class GpgChallengeController {
   })
   @Get('status/:githubUsername')
   @HttpCode(HttpStatus.OK)
-  public async getStatus(@Param('githubUsername') githubUsername: string): Promise<ContributorStatus> {
-    return this.gpgChallengeService.getContributorStatus(githubUsername)
+  public async getStatus(@Param() params: GetStatusParamsDto): Promise<ContributorStatus> {
+    return this.gpgChallengeService.getContributorStatus(params.githubUsername)
   }
 }
