@@ -4,6 +4,7 @@ import type { Request } from 'express'
 import { JwtService } from '@nestjs/jwt'
 
 import { BearerGuard, extractTokenFromRequest } from '../oauth/guards'
+import { ConfigService } from '@config'
 
 import { ContributorOnboardingService } from './contributor-onboarding.service'
 import { ContributorOnboardingStatusDto, type AuthInfo } from './contributor-onboarding.types'
@@ -15,6 +16,7 @@ export class ContributorOnboardingController {
   public constructor(
     private readonly contributorOnboardingService: ContributorOnboardingService,
     private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
   ) {}
 
   @ApiOperation({ summary: 'Create a GitHub OAuth authorization URL for contributor login.' })
@@ -58,7 +60,11 @@ export class ContributorOnboardingController {
   @HttpCode(HttpStatus.OK)
   public async getStatus(@Req() request: Request): Promise<ContributorOnboardingStatusDto> {
     const token = extractTokenFromRequest(request as any)
-    const authInfo = this.jwtService.decode<AuthInfo>(token)
+    const authInfo = await this.jwtService.verifyAsync<AuthInfo>(token, {
+      secret: this.configService.jwtConfig.secret,
+      issuer: this.configService.jwtConfig.issuer,
+      audience: this.configService.jwtConfig.audience,
+    })
     return this.contributorOnboardingService.getStatus(authInfo)
   }
 }
