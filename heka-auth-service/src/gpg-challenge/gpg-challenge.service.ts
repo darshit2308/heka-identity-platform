@@ -43,6 +43,8 @@ const GITHUB_REQUEST_TIMEOUT_MS = 8_000
  * @see https://docs.github.com/en/github/setting-up-and-managing-your-github-profile/personalizing-your-profile/about-your-profile
  */
 const GITHUB_USERNAME_PATTERN = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/
+const ARMORED_PUBLIC_KEY_BLOCK_PATTERN =
+  /-----BEGIN PGP PUBLIC KEY BLOCK-----[\s\S]*?-----END PGP PUBLIC KEY BLOCK-----/g
 
 /**
  * Describes a successfully verified challenge, returned to the controller
@@ -466,10 +468,18 @@ export class GpgChallengeService {
   }
 
   private async readPublicKeys(armoredKeys: string): Promise<openpgp.Key[]> {
-    // openpgp.readKeys natively handles multiple concatenated armored public key
-    // blocks in a single call, so no regex pre-splitting is needed.
     try {
-      return await openpgp.readKeys({ armoredKeys })
+      const publicKeys = await openpgp.readKeys({ armoredKeys })
+      const armoredBlocks = armoredKeys.match(ARMORED_PUBLIC_KEY_BLOCK_PATTERN) ?? []
+
+      if (armoredBlocks.length <= publicKeys.length) {
+        return publicKeys
+      }
+
+      const parsedBlocks = await Promise.all(
+        armoredBlocks.map((armoredBlock) => openpgp.readKeys({ armoredKeys: armoredBlock })),
+      )
+      return parsedBlocks.flat()
     } catch {
       throw new BadRequestException(
         'The GPG public key returned by GitHub could not be parsed. ' +

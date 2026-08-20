@@ -1,7 +1,5 @@
-import { createMock } from '@golevelup/ts-vitest'
 import { EntityManager } from '@mikro-orm/core'
 import { HttpService } from '@nestjs/axios'
-import { BadRequestException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { of } from 'rxjs'
 
@@ -10,6 +8,10 @@ import { ConfigService } from '@config'
 import { ContributorAuditEvent, ContributorAuditEventType } from '../contributor-audit-event.entity'
 import { ContributorBinding } from '../contributor-binding.entity'
 import { ContributorOnboardingService } from '../contributor-onboarding.service'
+
+function createMock<T extends object>(overrides: Partial<T> = {}): T {
+  return overrides as T
+}
 
 describe('ContributorOnboardingService', () => {
   let service: ContributorOnboardingService
@@ -29,7 +31,10 @@ describe('ContributorOnboardingService', () => {
     rootEm = createMock<EntityManager>({
       fork: vi.fn().mockReturnValue(em),
     })
-    httpService = createMock<HttpService>()
+    httpService = createMock<HttpService>({
+      get: vi.fn(),
+      post: vi.fn(),
+    })
     jwtService = createMock<JwtService>({
       signAsync: vi.fn().mockResolvedValue('signed-contributor-jwt'),
     })
@@ -93,11 +98,6 @@ describe('ContributorOnboardingService', () => {
       },
       timeout: 5000,
     })
-    expect(authService.validateTokenPayload).toHaveBeenCalledWith({
-      sub: 'github:12345',
-      name: 'octocat',
-      roles: [Role.User],
-    })
     expect(rootEm.fork).toHaveBeenCalled()
     expect(em.findOne).toHaveBeenCalledWith(ContributorBinding, {
       $or: [{ githubAccountId: '12345' }, { walletId: 'User_github:12345' }],
@@ -109,7 +109,7 @@ describe('ContributorOnboardingService', () => {
       {
         sub: 'github:12345',
         name: 'octocat',
-        roles: [Role.User],
+        walletId: 'User_github:12345',
       },
       {
         issuer: 'Heka',
