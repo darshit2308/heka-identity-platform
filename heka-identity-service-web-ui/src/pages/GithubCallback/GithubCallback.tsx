@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -15,8 +15,15 @@ const GithubCallback = () => {
   const [searchParams] = useSearchParams();
   const { resetApplicationState } = useAppState();
   const [isLoading, setIsLoading] = useState(true);
+  const hasStartedOAuthExchange = useRef(false);
 
   useEffect(() => {
+    if (hasStartedOAuthExchange.current) {
+      return;
+    }
+
+    hasStartedOAuthExchange.current = true;
+
     const code = searchParams.get('code');
     const state = searchParams.get('state');
 

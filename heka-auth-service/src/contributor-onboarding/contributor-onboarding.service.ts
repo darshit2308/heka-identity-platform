@@ -268,9 +268,17 @@ export class ContributorOnboardingService {
       binding = new ContributorBinding(input)
       em.persist(binding)
     } else {
+      const hasIdentityChanged =
+        binding.githubAccountId !== input.githubAccountId || binding.walletId !== input.walletId
+
       binding.githubAccountId = input.githubAccountId
       binding.githubUsername = input.githubUsername
       binding.walletId = input.walletId
+
+      if (hasIdentityChanged) {
+        binding.gpgFingerprint = undefined
+        binding.verifiedAt = undefined
+      }
     }
 
     this.recordAuditEvent(em, {

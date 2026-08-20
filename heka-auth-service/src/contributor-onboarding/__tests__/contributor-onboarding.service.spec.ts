@@ -1,6 +1,5 @@
 import { EntityManager } from '@mikro-orm/core'
 import { HttpService } from '@nestjs/axios'
-import { BadRequestException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { of } from 'rxjs'
 
@@ -131,6 +130,38 @@ describe('ContributorOnboardingService', () => {
       },
       redirectPath: '/contributor/onboarding',
     })
+  })
+
+  it('clears stale GPG verification when an existing binding is rebound to a different GitHub account', async () => {
+    const { state } = service.createGithubAuthorizationUrl('/contributor/onboarding')
+    const existingBinding = new ContributorBinding({
+      githubAccountId: '99999',
+      githubUsername: 'previous-user',
+      walletId: 'User_github:12345',
+      gpgFingerprint: 'STALE-FINGERPRINT',
+      verifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+    })
+
+    vi.mocked(httpService.post).mockReturnValue(
+      of({
+        data: { access_token: 'github-access-token' },
+      } as any),
+    )
+    vi.mocked(httpService.get).mockReturnValue(
+      of({
+        data: { id: 12345, login: 'octocat' },
+      } as any),
+    )
+    vi.mocked(em.findOne).mockResolvedValue(existingBinding)
+
+    const result = await service.loginWithGithubOAuth('github-code', state)
+
+    expect(existingBinding.githubAccountId).toBe('12345')
+    expect(existingBinding.githubUsername).toBe('octocat')
+    expect(existingBinding.gpgFingerprint).toBeUndefined()
+    expect(existingBinding.verifiedAt).toBeUndefined()
+    expect(result.binding.gpgFingerprint).toBeUndefined()
+    expect(result.binding.verifiedAt).toBeUndefined()
   })
 
   it('reads contributor status through a forked EntityManager', async () => {
