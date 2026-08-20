@@ -290,7 +290,11 @@ describe('GpgChallengeService', () => {
       // A string that is not a PGP armored block at all will cause openpgp to
       // throw before (or inside) our try/catch; the service must bubble it as an
       // error regardless of the exception type.
-      await expect(service.verifySignature('test-challenge-id', 'this is not a pgp message')).rejects.toThrow()
+      await expect(service.verifySignature('test-challenge-id', 'this is not a pgp message')).rejects.toThrow(
+        expect.objectContaining({
+          message: expect.stringContaining('could not be parsed as a PGP cleartext-signed message'),
+        }),
+      )
     })
   })
 

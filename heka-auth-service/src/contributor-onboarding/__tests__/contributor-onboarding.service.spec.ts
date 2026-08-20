@@ -1,13 +1,11 @@
 import { createMock } from '@golevelup/ts-vitest'
 import { EntityManager } from '@mikro-orm/core'
 import { HttpService } from '@nestjs/axios'
+import { BadRequestException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { of } from 'rxjs'
 
-import { AuthService, Role } from 'common/auth'
-import { Logger } from 'common/logger'
-import GithubConfig from 'config/github'
-import JwtConfig from 'config/jwt'
+import { ConfigService } from '@config'
 
 import { ContributorAuditEvent, ContributorAuditEventType } from '../contributor-audit-event.entity'
 import { ContributorBinding } from '../contributor-binding.entity'
@@ -19,29 +17,7 @@ describe('ContributorOnboardingService', () => {
   let em: ReturnType<typeof createMock<EntityManager>>
   let httpService: ReturnType<typeof createMock<HttpService>>
   let jwtService: ReturnType<typeof createMock<JwtService>>
-  let authService: ReturnType<typeof createMock<AuthService>>
-
-  const githubConfig = {
-    oauthClientId: 'github-client-id',
-    oauthClientSecret: 'github-client-secret',
-    oauthRedirectUri: 'http://localhost:8000/contributor/github/callback',
-    oauthAuthorizeUrl: 'https://github.com/login/oauth/authorize',
-    oauthTokenUrl: 'https://github.com/login/oauth/access_token',
-    oauthStateSecret: 'state-secret',
-    oauthStateTtlSeconds: 600,
-    userApiUrl: 'https://api.github.com/user',
-    usersApiUrl: 'https://api.github.com/users',
-    requestTimeoutMs: 5000,
-  } as ReturnType<typeof GithubConfig>
-
-  const jwtConfig = {
-    secret: 'jwt-secret',
-    signOptions: {},
-    verifyOptions: {
-      issuer: 'Heka',
-      audience: 'Heka Identity Service',
-    },
-  } as ReturnType<typeof JwtConfig>
+  let configService: ReturnType<typeof createMock<ConfigService>>
 
   beforeEach(() => {
     em = createMock<EntityManager>({
@@ -57,21 +33,27 @@ describe('ContributorOnboardingService', () => {
     jwtService = createMock<JwtService>({
       signAsync: vi.fn().mockResolvedValue('signed-contributor-jwt'),
     })
-    authService = createMock<AuthService>({
-      validateTokenPayload: vi.fn().mockResolvedValue({
-        walletId: 'User_github:12345',
-      }),
+    configService = createMock<ConfigService>({
+      githubConfig: {
+        oauthClientId: 'github-client-id',
+        oauthClientSecret: 'github-client-secret',
+        oauthRedirectUri: 'http://localhost:8000/contributor/github/callback',
+        oauthAuthorizeUrl: 'https://github.com/login/oauth/authorize',
+        oauthTokenUrl: 'https://github.com/login/oauth/access_token',
+        oauthStateSecret: 'state-secret',
+        oauthStateTtlSeconds: 600,
+        userApiUrl: 'https://api.github.com/user',
+        usersApiUrl: 'https://api.github.com/users',
+        requestTimeoutMs: 5000,
+      } as any,
+      jwtConfig: {
+        secret: 'jwt-secret',
+        issuer: 'Heka',
+        audience: 'Heka Identity Service',
+      } as any,
     })
 
-    service = new ContributorOnboardingService(
-      rootEm,
-      httpService,
-      jwtService,
-      authService,
-      createMock<Logger>(),
-      githubConfig,
-      jwtConfig,
-    )
+    service = new ContributorOnboardingService(rootEm, httpService, jwtService, configService)
   })
 
   it('completes GitHub OAuth and persists the contributor binding with a forked EntityManager', async () => {

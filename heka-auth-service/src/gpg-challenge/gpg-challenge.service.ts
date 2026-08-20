@@ -18,6 +18,8 @@ import { firstValueFrom } from 'rxjs'
 
 import { ContributorOnboardingService } from '../contributor-onboarding'
 
+import { ConfigService } from '@config'
+
 import { GpgChallenge } from './gpg-challenge.entity'
 
 /** Nonce TTL in minutes. */
@@ -105,6 +107,7 @@ export class GpgChallengeService {
     private readonly challengeRepo: EntityRepository<GpgChallenge>,
     private readonly httpService: HttpService,
     private readonly contributorOnboardingService: ContributorOnboardingService,
+    private readonly configService: ConfigService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -178,10 +181,21 @@ export class GpgChallengeService {
    * @throws {HttpException} (429) GitHub API rate limit reached.
    * @throws {ServiceUnavailableException} GitHub API unreachable.
    */
-  public async verifySignature(challengeId: string, armoredMessage: string): Promise<VerificationResult> {
+  public async verifySignature(
+    challengeId: string,
+    armoredMessage: string,
+    authenticatedWalletId?: string,
+  ): Promise<VerificationResult> {
     const challenge = await this.challengeRepo.findOne({ id: challengeId })
 
     if (!challenge) {
+      throw new NotFoundException(`Challenge session '${challengeId}' not found.`)
+    }
+
+    // Ownership check: if the caller is authenticated, the challenge must belong
+    // to their wallet. This prevents a logged-in user from consuming another
+    // contributor's challenge and stamping verifiedAt on an unrelated record.
+    if (authenticatedWalletId && challenge.walletId && authenticatedWalletId !== challenge.walletId) {
       throw new NotFoundException(`Challenge session '${challengeId}' not found.`)
     }
 
@@ -226,15 +240,13 @@ export class GpgChallengeService {
 
     if (!verification.isValid) {
       this.logger.warn(`Signature verification failed for @${challenge.githubUsername}`)
-      if (challenge.githubAccountId) {
-        await this.contributorOnboardingService.recordProofRejected({
-          githubAccountId: challenge.githubAccountId,
-          githubUsername: challenge.githubUsername,
-          walletId: challenge.walletId,
-          challengeId,
-          reason: 'Invalid signature',
-        })
-      }
+      await this.contributorOnboardingService.recordProofRejected({
+        githubAccountId: challenge.githubAccountId,
+        githubUsername: challenge.githubUsername,
+        walletId: challenge.walletId,
+        challengeId,
+        reason: 'Invalid signature',
+      })
       return { verified: false }
     }
 
@@ -245,15 +257,13 @@ export class GpgChallengeService {
 
     this.logger.log(`Signature verified for @${challenge.githubUsername} - fingerprint: ${gpgFingerprint}`)
 
-    if (challenge.githubAccountId && challenge.walletId) {
-      await this.contributorOnboardingService.recordProofAccepted({
-        githubAccountId: challenge.githubAccountId,
-        githubUsername: challenge.githubUsername,
-        walletId: challenge.walletId,
-        gpgFingerprint,
-        verifiedAt: challenge.verifiedAt,
-      })
-    }
+    await this.contributorOnboardingService.recordProofAccepted({
+      githubAccountId: challenge.githubAccountId,
+      githubUsername: challenge.githubUsername,
+      walletId: challenge.walletId,
+      gpgFingerprint,
+      verifiedAt: challenge.verifiedAt,
+    })
 
     return { verified: true, gpgFingerprint }
   }
@@ -315,7 +325,7 @@ export class GpgChallengeService {
       )
     }
 
-    const url = `https://github.com/${githubUsername}.gpg`
+    const url = `${this.configService.githubConfig.usersApiUrl.replace(/\/users$/, '')}/${encodeURIComponent(githubUsername)}.gpg`
 
     let armoredKeys: string
     try {
@@ -456,22 +466,10 @@ export class GpgChallengeService {
   }
 
   private async readPublicKeys(armoredKeys: string): Promise<openpgp.Key[]> {
-    const armoredBlocks = armoredKeys.match(
-      /-----BEGIN PGP PUBLIC KEY BLOCK-----[\s\S]*?-----END PGP PUBLIC KEY BLOCK-----/g,
-    )
-
-    if (!armoredBlocks?.length) {
-      throw new BadRequestException(
-        'The GPG public key returned by GitHub could not be parsed. ' +
-          'This may indicate a corrupted key on your GitHub profile.',
-      )
-    }
-
+    // openpgp.readKeys natively handles multiple concatenated armored public key
+    // blocks in a single call, so no regex pre-splitting is needed.
     try {
-      const parsedKeys = await Promise.all(
-        armoredBlocks.map((armoredKey) => openpgp.readKeys({ armoredKeys: armoredKey })),
-      )
-      return parsedKeys.flat()
+      return await openpgp.readKeys({ armoredKeys })
     } catch {
       throw new BadRequestException(
         'The GPG public key returned by GitHub could not be parsed. ' +
