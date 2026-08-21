@@ -1,4 +1,3 @@
-import { GpgChallenge } from '../../gpg-challenge/gpg-challenge.entity'
 import { CredentialStatusList } from './credential-status-list.entity'
 import { Identified } from './identified.entity'
 import { IssuanceTemplateField } from './issuance-template-field.entity'
@@ -23,7 +22,6 @@ export {
   VerificationTemplate,
   VerificationTemplateField,
   CredentialStatusList,
-  GpgChallenge,
 }
 
 export default [
@@ -38,5 +36,4 @@ export default [
   VerificationTemplate,
   VerificationTemplateField,
   CredentialStatusList,
-  GpgChallenge,
 ]
