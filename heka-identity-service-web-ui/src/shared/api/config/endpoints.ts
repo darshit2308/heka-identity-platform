@@ -45,6 +45,15 @@ export const agencyEndpoints = {
   getSingleVerificationTemplate: (id: string) =>
     `/verification-templates/${id}`,
   prepareWallet: '/prepare-wallet',
+
+  // ── Contributor onboarding ───────────────────────────────────────────────
+  contributorGithubAuthorizationUrl:
+    '/contributor-onboarding/github/authorization-url',
+  contributorGithubCallback: '/contributor-onboarding/github/callback',
+  contributorOnboardingStatus: '/contributor-onboarding/status',
+  requestContributorGpgChallenge: '/gpg-challenge/request',
+  verifyContributorGpgChallenge: '/gpg-challenge/verify',
+  contributorCredentialOffer: '/v2/contributor-credential/offer',
 };
 
 export const authEndpoints = {
