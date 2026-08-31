@@ -27,6 +27,8 @@ export {
   VerificationTemplate,
   VerificationTemplateField,
   CredentialStatusList,
+  ContributorBinding,
+  ContributorAuditEvent,
 }
 
 export default [
