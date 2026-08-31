@@ -50,6 +50,7 @@ export const agencyEndpoints = {
   contributorOnboardingStatus: '/v2/contributor-onboarding/status',
   requestGpgChallenge: '/v2/gpg-challenge/request',
   verifyGpgChallenge: '/v2/gpg-challenge/verify',
+  contributorCredentialOffer: '/v2/contributor-credential/offer',
 };
 
 export const authEndpoints = {
