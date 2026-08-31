@@ -26,8 +26,8 @@ export interface ContributorBinding {
   githubAccountId: string;
   githubUsername: string;
   walletId: string;
-  gpgFingerprint?: string;
-  verifiedAt?: string;
+  gpgFingerprint?: string | null;
+  verifiedAt?: string | null;
   updatedAt: string;
 }
 
@@ -48,9 +48,10 @@ export interface ContributorAuditEvent {
 
 export interface ContributorOnboardingStatus {
   github?: ContributorGithubIdentity;
-  binding?: ContributorBinding;
+  binding?: ContributorBinding | null;
   verificationStatus: ContributorVerificationStatus;
   auditEvents: ContributorAuditEvent[];
+  credentialIssued?: boolean;
 }
 
 export interface User {
