@@ -1,5 +1,5 @@
 /**
- * Exact shape of the SD-JWT VC payload for a GithubContributorCredential.
+ * Payload of the SD-JWT VC issued for a `GithubContributorCredential`.
  *
  * Always-present (non-selectively-disclosable):
  *   - `githubAccountId` — GitHub's immutable numeric account ID (string form)
@@ -11,27 +11,13 @@
  *   - `gpgFingerprint`  — Uppercase hex fingerprint of the verified GPG key
  */
 export interface ContributorCredentialPayload {
-  /** GitHub numeric account ID (immutable — identity binding anchor). */
   githubAccountId: string
-
-  /** GitHub login / username at the time of verification. */
   githubUsername: string
-
-  /**
-   * Full fingerprint of the GPG key that produced the verified signature,
-   * formatted as an uppercase hex string (e.g. "A1B2C3D4E5F6…").
-   */
   gpgFingerprint: string
-
-  /** ISO-8601 UTC timestamp at which GPG ownership was verified. */
   verifiedAt: string
 
   /** Heka wallet id from the authenticated session. */
   walletId: string
-
-  /** Verifiable Credential Type (required by SD-JWT VC format) */
   vct: string
-
-  /** Allows any other claims, required for compatibility with SdJwtVcPayload */
   [key: string]: unknown
 }
