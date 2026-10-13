@@ -26,3 +26,6 @@ export const getContributorIsLoading = (state: StateSchema) =>
 
 export const getContributorError = (state: StateSchema) =>
   state.contributor?.error ?? null;
+
+export const getContributorToken = (state: StateSchema) =>
+  state.contributor?.contributorToken ?? null;
