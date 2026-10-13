@@ -1,13 +1,13 @@
-import { MikroOrmModule } from '@mikro-orm/nestjs'
 import { Module } from '@nestjs/common'
 
 import { AgentModule } from 'common/agent'
-import { ContributorBinding } from 'contributor-onboarding'
 import { OpenId4VcIssuanceSessionModule } from 'openid4vc/issuance-sessions/issuance-session.module'
 import { OpenId4VcIssuerModule } from 'openid4vc/issuer/issuer.module'
 
+import { AuthServiceClient } from './auth-service.client'
 import { ContributorCredentialController } from './contributor-credential.controller'
 import { ContributorCredentialService } from './contributor-credential.service'
+import { ContributorJwtGuard } from './contributor-jwt.guard'
 
 /**
  * ContributorCredentialModule
@@ -24,17 +24,17 @@ import { ContributorCredentialService } from './contributor-credential.service'
  *   - `AgentModule`             — provides the root Credo agent for tenant access
  *   - `OpenId4VcIssuerModule`   — `OpenId4VcIssuerService` (creates/updates issuer records)
  *   - `OpenId4VcIssuanceSessionModule` — `OpenId4VcIssuanceSessionService` (creates offers)
- *   - `MikroOrmModule.forFeature([ContributorBinding])` — typed repository access
+ *   - `AuthServiceClient`       — queries heka-auth-service for verified contributor data
+ *   - `ContributorJwtGuard`     — validates the contributor token from auth-service
  */
 @Module({
   imports: [
     AgentModule,
     OpenId4VcIssuerModule,
     OpenId4VcIssuanceSessionModule,
-    MikroOrmModule.forFeature([ContributorBinding]),
   ],
   controllers: [ContributorCredentialController],
-  providers: [ContributorCredentialService],
+  providers: [ContributorCredentialService, AuthServiceClient, ContributorJwtGuard],
   exports: [ContributorCredentialService],
 })
 export class ContributorCredentialModule {}

@@ -1,11 +1,10 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Version } from '@nestjs/common'
+import { Controller, HttpCode, HttpStatus, Post, UseGuards, Version } from '@nestjs/common'
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 
 import { ContributorCredentialService } from './contributor-credential.service'
-import {
-  ContributorCredentialOfferRequestDto,
-  ContributorCredentialOfferResponseDto,
-} from './dto/contributor-credential-offer.dto'
+import { ContributorJwtGuard } from './contributor-jwt.guard'
+import { ContributorCredentialOfferResponseDto } from './dto/contributor-credential-offer.dto'
+import { ReqContributorAuth, type ContributorAuthInfo } from './req-contributor-auth.decorator'
 
 /**
  * ContributorCredentialController
@@ -13,10 +12,12 @@ import {
  * Exposes the OID4VCI credential offer endpoint for the
  * `GithubContributorCredential` SD-JWT VC.
  *
- * All routes require a valid Heka JWT (issued after GitHub OAuth login).
+ * All routes require a valid contributor JWT issued by auth-service
+ * upon successful GPG challenge verification.
  */
 @ApiTags('Contributor Credential')
 @ApiBearerAuth()
+@UseGuards(ContributorJwtGuard)
 @Controller('contributor-credential')
 export class ContributorCredentialController {
   public constructor(private readonly contributorCredentialService: ContributorCredentialService) {}
@@ -24,15 +25,9 @@ export class ContributorCredentialController {
   /**
    * Create an OID4VCI credential offer for a verified contributor.
    *
-   * Looks up the verified `ContributorBinding` by `githubAccountId`,
-   * builds an SD-JWT VC payload with the Week 2 disclosure policy, and
-   * returns an `openid-credential-offer://` URI the contributor's wallet
-   * can use to retrieve the credential.
-   *
-   * **Requirements:** The contributor must have:
-   *   1. Completed GitHub OAuth login (`/contributor-onboarding/github/callback`)
-   *   2. Requested a GPG challenge (`/gpg-challenge/request`)
-   *   3. Submitted a valid GPG signature proof (`/gpg-challenge/verify`)
+   * Authenticated via ContributorJwtGuard with the token issued by auth-service.
+   * The contributor's GitHub account ID is extracted from the verified JWT claims,
+   * not from the request body, preventing identity spoofing.
    */
   @Version('2')
   @Post('offer')
@@ -49,17 +44,23 @@ export class ContributorCredentialController {
     type: ContributorCredentialOfferResponseDto,
   })
   @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Missing or invalid contributor JWT token.',
+  })
+  @ApiResponse({
     status: HttpStatus.NOT_FOUND,
-    description: 'No verified contributor binding found for the given GitHub account ID.',
+    description: 'No verified contributor binding found for the authenticated GitHub account ID.',
   })
   @ApiResponse({
     status: HttpStatus.CONFLICT,
     description: 'Contributor binding exists but GPG verification is not yet complete.',
   })
   public async createOffer(
-    @Body() req: ContributorCredentialOfferRequestDto,
+    @ReqContributorAuth() contributor: ContributorAuthInfo,
   ): Promise<ContributorCredentialOfferResponseDto> {
-    const credentialOffer = await this.contributorCredentialService.issueContributorCredential(req.githubAccountId)
+    const credentialOffer = await this.contributorCredentialService.issueContributorCredential(
+      contributor.githubAccountId,
+    )
     return new ContributorCredentialOfferResponseDto(credentialOffer)
   }
 }
