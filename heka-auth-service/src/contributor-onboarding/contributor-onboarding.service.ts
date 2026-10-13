@@ -3,9 +3,11 @@ import { EntityManager } from '@mikro-orm/core'
 import { HttpService } from '@nestjs/axios'
 import {
   BadRequestException,
+  ConflictException,
   HttpException,
   Injectable,
   Logger,
+  NotFoundException,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common'
@@ -57,6 +59,18 @@ interface ContributorAuditInput {
  */
 function contributorWalletId(githubAccountId: string): string {
   return `User_github:${githubAccountId}`
+}
+
+/**
+ * DTO returned by the internal binding endpoint.
+ * Consumed by identity-service to build the contributor's Verifiable Credential.
+ */
+export interface VerifiedContributorDto {
+  githubAccountId: string
+  githubUsername: string
+  gpgFingerprint: string
+  verifiedAt: string
+  walletId: string
 }
 
 @Injectable()
@@ -441,6 +455,39 @@ export class ContributorOnboardingService {
     }
 
     return payload
+  }
+
+  /**
+   * Returns verified contributor data for a given GitHub account ID.
+   *
+   * Called internally by identity-service via the InternalAuthGuard-protected
+   * endpoint to look up a contributor before issuing a Verifiable Credential.
+   *
+   * Auth-service is the single source of truth for contributor bindings.
+   * Identity-service must NOT duplicate this data in its own DB.
+   *
+   * @throws {NotFoundException} if no binding exists for the given account ID.
+   * @throws {ConflictException} if the binding exists but GPG verification is incomplete.
+   */
+  public async getVerifiedBinding(githubAccountId: string): Promise<VerifiedContributorDto> {
+    const em = this.em.fork()
+    const binding = await em.findOne(ContributorBinding, { githubAccountId })
+
+    if (!binding) {
+      throw new NotFoundException(`No contributor binding found for GitHub account ID '${githubAccountId}'.`)
+    }
+
+    if (!binding.gpgFingerprint || !binding.verifiedAt) {
+      throw new ConflictException(`Contributor @${binding.githubUsername} has not completed GPG verification.`)
+    }
+
+    return {
+      githubAccountId: binding.githubAccountId,
+      githubUsername: binding.githubUsername,
+      gpgFingerprint: binding.gpgFingerprint,
+      verifiedAt: binding.verifiedAt.toISOString(),
+      walletId: binding.walletId,
+    }
   }
 
   private assertGithubOAuthConfigured(): void {

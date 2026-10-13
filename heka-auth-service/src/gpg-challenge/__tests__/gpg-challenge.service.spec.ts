@@ -343,7 +343,7 @@ describe('GpgChallengeService', () => {
 
       const result = await service.verifySignature(challenge.id, armoredMessage)
 
-      expect(result).toEqual({ verified: true, gpgFingerprint: expectedFingerprint })
+      expect(result).toMatchObject({ verified: true, gpgFingerprint: expectedFingerprint })
       expect(challenge.gpgFingerprint).toBe(expectedFingerprint)
     }, 30_000)
   })

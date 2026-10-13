@@ -1,11 +1,31 @@
 import { ConfigService } from '@config'
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Req, UseGuards } from '@nestjs/common'
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+  Version,
+} from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger'
+import {
+  ApiBearerAuth,
+  ApiExcludeEndpoint,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger'
 import type { Request } from 'express'
 
+import { InternalAuthGuard } from '../core/guards'
 import { BearerGuard, extractTokenFromRequest } from '../oauth/guards'
-import { ContributorOnboardingService } from './contributor-onboarding.service'
+import { ContributorOnboardingService, VerifiedContributorDto } from './contributor-onboarding.service'
 import { type AuthInfo, ContributorOnboardingStatusDto } from './contributor-onboarding.types'
 import { GithubOAuthCallbackDto, GithubOAuthUrlQueryDto } from './dto'
 
@@ -65,5 +85,24 @@ export class ContributorOnboardingController {
       audience: this.configService.jwtConfig.audience,
     })
     return this.contributorOnboardingService.getStatus(authInfo)
+  }
+
+  /**
+   * Internal endpoint: return verified contributor data for a given GitHub account ID.
+   *
+   * This endpoint is called only by identity-service (service-to-service).
+   * It is protected by InternalAuthGuard (x-internal-service-secret header) and
+   * is excluded from the public Swagger docs.
+   *
+   * Auth-service is the single source of truth for contributor_bindings.
+   * Identity-service must NOT duplicate this data in its own database.
+   */
+  @ApiExcludeEndpoint()
+  @Version('2')
+  @Get('binding/:githubAccountId')
+  @UseGuards(InternalAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  public async getVerifiedBinding(@Param('githubAccountId') githubAccountId: string): Promise<VerifiedContributorDto> {
+    return this.contributorOnboardingService.getVerifiedBinding(githubAccountId)
   }
 }

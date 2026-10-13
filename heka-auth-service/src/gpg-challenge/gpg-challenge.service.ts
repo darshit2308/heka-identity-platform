@@ -50,6 +50,12 @@ const ARMORED_PUBLIC_KEY_BLOCK_PATTERN =
 export interface VerificationSuccess {
   verified: true
   gpgFingerprint: string
+  /** The contributor's immutable GitHub numeric account ID. Used by the controller to sign the contributor JWT. */
+  githubAccountId: string
+  /** GitHub login at the time of verification. */
+  githubUsername: string
+  /** Contributor's wallet ID. Embedded in the contributor JWT for the credential offer flow. */
+  walletId: string
 }
 
 export interface VerificationFailure {
@@ -260,7 +266,13 @@ export class GpgChallengeService {
       verifiedAt: challenge.verifiedAt,
     })
 
-    return { verified: true, gpgFingerprint }
+    return {
+      verified: true,
+      gpgFingerprint,
+      githubAccountId: challenge.githubAccountId ?? '',
+      githubUsername: challenge.githubUsername,
+      walletId: challenge.walletId ?? '',
+    }
   }
 
   /**

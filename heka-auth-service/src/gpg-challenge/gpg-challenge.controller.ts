@@ -151,7 +151,10 @@ export class GpgChallengeController {
   public async verifySignature(
     @Req() request: Request,
     @Body() dto: VerifySignatureDto,
-  ): Promise<{ verified: true; gpgFingerprint: string; message: string } | { verified: false; message: string }> {
+  ): Promise<
+    | { verified: true; gpgFingerprint: string; contributorToken: string; message: string }
+    | { verified: false; message: string }
+  > {
     const token = extractTokenFromRequest(request as any)
     const authInfo = await this.jwtService.verifyAsync<AuthInfo>(token, {
       secret: this.configService.jwtConfig.secret,
@@ -166,9 +169,26 @@ export class GpgChallengeController {
     )
 
     if (result.verified) {
+      // Issue a short-lived contributor JWT so identity-service can trust the credential offer request.
+      // The token carries the contributor's verified identity without requiring a second DB roundtrip.
+      const contributorToken = await this.jwtService.signAsync(
+        {
+          sub: `github:${result.githubAccountId}`,
+          githubAccountId: result.githubAccountId,
+          githubUsername: result.githubUsername,
+          walletId: result.walletId,
+          scope: 'contributor:credential-offer',
+        },
+        {
+          expiresIn: '15m',
+          secret: this.configService.contributorJwtSecret,
+        },
+      )
+
       return {
         verified: true,
         gpgFingerprint: result.gpgFingerprint,
+        contributorToken,
         message: 'GPG signature successfully verified.',
       }
     }

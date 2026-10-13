@@ -1,6 +1,7 @@
 import { ConfigService } from '@config'
 import { EntityManager } from '@mikro-orm/core'
 import { HttpService } from '@nestjs/axios'
+import { ConflictException, NotFoundException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { of } from 'rxjs'
 
@@ -197,5 +198,43 @@ describe('ContributorOnboardingService', () => {
       username: 'octocat',
     })
     expect(result.auditEvents).toHaveLength(1)
+  })
+  describe('getVerifiedBinding', () => {
+    it('throws NotFoundException when binding does not exist', async () => {
+      vi.mocked(em.findOne).mockResolvedValue(null)
+      await expect(service.getVerifiedBinding('99999')).rejects.toThrow(NotFoundException)
+    })
+
+    it('throws ConflictException when GPG verification is incomplete', async () => {
+      const binding = new ContributorBinding({
+        githubAccountId: '12345',
+        githubUsername: 'octocat',
+        walletId: 'User_github:12345',
+      })
+      vi.mocked(em.findOne).mockResolvedValue(binding)
+      await expect(service.getVerifiedBinding('12345')).rejects.toThrow(ConflictException)
+    })
+
+    it('returns VerifiedContributorDto when binding is fully verified', async () => {
+      const verifiedAt = new Date('2026-08-01T00:00:00.000Z')
+      const binding = new ContributorBinding({
+        githubAccountId: '12345',
+        githubUsername: 'octocat',
+        walletId: 'User_github:12345',
+        gpgFingerprint: 'A1B2C3D4E5F6',
+        verifiedAt,
+      })
+      vi.mocked(em.findOne).mockResolvedValue(binding)
+
+      const result = await service.getVerifiedBinding('12345')
+
+      expect(result).toEqual({
+        githubAccountId: '12345',
+        githubUsername: 'octocat',
+        gpgFingerprint: 'A1B2C3D4E5F6',
+        verifiedAt: verifiedAt.toISOString(),
+        walletId: 'User_github:12345',
+      })
+    })
   })
 })
