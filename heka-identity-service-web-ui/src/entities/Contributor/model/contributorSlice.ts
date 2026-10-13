@@ -44,6 +44,8 @@ export interface ContributorState {
   isLoading: boolean;
   /** Error message from the most recent failed action. */
   error: string | null;
+  /** Short-lived JWT issued after GPG verification for credential offer. */
+  contributorToken: string | null;
 }
 
 const initialState: ContributorState = {
@@ -58,6 +60,7 @@ const initialState: ContributorState = {
   credentialIssued: false,
   isLoading: false,
   error: null,
+  contributorToken: null,
 };
 
 export const contributorSlice = createSlice({
@@ -191,6 +194,9 @@ export const contributorSlice = createSlice({
         (state, action: PayloadAction<VerifyContributorGpgChallengeResult>) => {
           state.isLoading = false;
           state.verificationResult = action.payload;
+          if (action.payload.contributorToken) {
+            state.contributorToken = action.payload.contributorToken;
+          }
           if (action.payload.verified) {
             state.binding = action.payload.binding ?? null;
             if (!state.completedSteps.includes(2)) {

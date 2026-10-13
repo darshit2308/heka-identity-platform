@@ -14,6 +14,7 @@ export interface VerifyContributorGpgChallengeResult {
   verified: boolean;
   message: string;
   gpgFingerprint?: string;
+  contributorToken?: string;
   binding?: ContributorBinding;
 }
 
