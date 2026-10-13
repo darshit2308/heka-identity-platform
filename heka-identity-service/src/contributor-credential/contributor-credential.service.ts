@@ -1,6 +1,5 @@
 import { EntityManager } from '@mikro-orm/core'
 import {
-  ConflictException,
   Inject,
   Injectable,
   Logger,
@@ -13,7 +12,7 @@ import { Agent, AGENT_TOKEN } from 'common/agent'
 import { Role } from 'common/auth'
 import { Wallet } from 'common/entities'
 import AgentConfig from 'config/agent'
-import { ContributorBinding } from 'contributor-onboarding'
+import { AuthServiceClient, type VerifiedContributorDto } from './auth-service.client'
 import { OpenId4VciCredentialFormatProfile } from '@credo-ts/openid4vc'
 import { CredentialFormat } from 'openid4vc/issuer/dto/common/credential'
 import { OpenId4VcIssuerService } from 'openid4vc/issuer/issuer.service'
@@ -66,6 +65,7 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
     @Inject(AgentConfig.KEY) private readonly agentConfig: ConfigType<typeof AgentConfig>,
     private readonly em: EntityManager,
     private readonly openId4VcIssuerService: OpenId4VcIssuerService,
+    private readonly authServiceClient: AuthServiceClient,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -119,21 +119,7 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
    * @throws {ConflictException} The binding exists but GPG verification is not yet complete.
    */
   public async issueContributorCredential(githubAccountId: string): Promise<string> {
-    const binding = await this.em.findOne(ContributorBinding, { githubAccountId })
-
-    if (!binding) {
-      throw new NotFoundException(
-        `No contributor binding found for GitHub account ID '${githubAccountId}'. ` +
-          'The contributor must complete the GitHub OAuth login flow first.',
-      )
-    }
-
-    if (!binding.gpgFingerprint || !binding.verifiedAt) {
-      throw new ConflictException(
-        `Contributor @${binding.githubUsername} has not yet completed GPG verification. ` +
-          'A credential can only be issued after successful signature verification.',
-      )
-    }
+    const contributor = await this.authServiceClient.getVerifiedContributor(githubAccountId)
 
     const tenantId = await this.resolveDemoTenantId()
     if (!tenantId) {
@@ -153,16 +139,30 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
         )
       }
 
-      // Resolve the verification method deterministically from the DID document
+      // Resolve the verification method / assertion method deterministically from the DID document
       const { didDocument } = await tenantAgent.dids.resolve(issuerDid)
-      if (!didDocument?.verificationMethod?.length) {
+      let issuerDidUrl: string | undefined
+      const amEntry = didDocument?.assertionMethod?.[0]
+      if (typeof amEntry === 'string') {
+        issuerDidUrl = amEntry
+      } else if (
+        amEntry &&
+        typeof amEntry === 'object' &&
+        'id' in amEntry &&
+        typeof (amEntry as { id?: unknown }).id === 'string'
+      ) {
+        issuerDidUrl = (amEntry as { id: string }).id
+      } else if (didDocument?.verificationMethod?.[0]?.id) {
+        issuerDidUrl = didDocument.verificationMethod[0].id
+      }
+
+      if (!issuerDidUrl) {
         throw new NotFoundException(
           `Unable to resolve signing key for issuer DID: ${issuerDid}`,
         )
       }
-      const issuerDidUrl = didDocument.verificationMethod[0].id
 
-      const payload = this.buildPayload(binding)
+      const payload = this.buildPayload(contributor)
       const disclosureFrame = this.buildDisclosureFrame()
 
       // Build issuance metadata in the same shape the credential-request mapper expects
@@ -198,7 +198,7 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
     }
 
     this.logger.log(
-      `Credential offer created for contributor @${binding.githubUsername} (account ${githubAccountId})`,
+      `Credential offer created for contributor @${contributor.githubUsername} (account ${githubAccountId})`,
     )
 
     return credentialOffer
@@ -330,14 +330,14 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
    * All five Week 2 claims are included; the disclosure frame determines
    * which ones are selectively disclosable.
    */
-  private buildPayload(binding: ContributorBinding): ContributorCredentialPayload {
+  private buildPayload(contributor: VerifiedContributorDto): ContributorCredentialPayload {
     return {
       vct: CONTRIBUTOR_CREDENTIAL_VCT,
-      githubAccountId: binding.githubAccountId,
-      githubUsername: binding.githubUsername,
-      gpgFingerprint: binding.gpgFingerprint!,
-      verifiedAt: binding.verifiedAt!.toISOString(),
-      walletId: binding.walletId,
+      githubAccountId: contributor.githubAccountId,
+      githubUsername: contributor.githubUsername,
+      gpgFingerprint: contributor.gpgFingerprint,
+      verifiedAt: contributor.verifiedAt,
+      walletId: contributor.walletId,
     }
   }
 

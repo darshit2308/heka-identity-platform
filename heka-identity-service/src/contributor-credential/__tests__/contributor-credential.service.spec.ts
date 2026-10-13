@@ -4,9 +4,9 @@ import { EntityManager } from '@mikro-orm/core'
 import { ConflictException, NotFoundException } from '@nestjs/common'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ContributorBinding } from 'contributor-onboarding'
 import { OpenId4VcIssuerService } from 'openid4vc/issuer/issuer.service'
 
+import { AuthServiceClient, type VerifiedContributorDto } from '../auth-service.client'
 import {
   CONTRIBUTOR_CREDENTIAL_SELECTIVE_CLAIMS,
   CONTRIBUTOR_CREDENTIAL_SUPPORTED_ID,
@@ -18,16 +18,16 @@ import { ContributorCredentialService } from '../contributor-credential.service'
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Builds a minimal verified ContributorBinding for use in tests. */
-function buildBinding(overrides: Partial<ContributorBinding> = {}): ContributorBinding {
-  const b = new ContributorBinding({
+/** Builds a minimal verified contributor payload for use in tests. */
+function buildContributor(overrides: Partial<VerifiedContributorDto> = {}): VerifiedContributorDto {
+  return {
     githubAccountId: '11111111',
     githubUsername: 'test-contributor',
     walletId: 'User_demo',
     gpgFingerprint: 'AABBCCDDEEFF00112233445566778899AABBCCDD',
-    verifiedAt: new Date('2026-07-13T10:00:00.000Z'),
-  })
-  return Object.assign(b, overrides)
+    verifiedAt: '2026-07-13T10:00:00.000Z',
+    ...overrides,
+  }
 }
 
 /** Minimal AgentConfig read by the service. */
@@ -46,17 +46,22 @@ const FAKE_CREDENTIAL_OFFER_URI = 'openid-credential-offer://?credential_offer_u
 function buildFakeTenantAgent(overrides: Partial<{
   createdDids: Array<{ did: string }>
   verificationMethods: Array<{ id: string }>
+  assertionMethods: Array<string | { id: string }>
   credentialOfferUri: string
 }> = {}) {
   const createdDids = overrides.createdDids ?? [{ did: FAKE_ISSUER_DID }]
   const verificationMethods = overrides.verificationMethods ?? [{ id: FAKE_VERIFICATION_METHOD }]
+  const assertionMethods = overrides.assertionMethods ?? [FAKE_VERIFICATION_METHOD]
   const credentialOfferUri = overrides.credentialOfferUri ?? FAKE_CREDENTIAL_OFFER_URI
 
   return {
     dids: {
       getCreatedDids: vi.fn().mockResolvedValue(createdDids),
       resolve: vi.fn().mockResolvedValue({
-        didDocument: { verificationMethod: verificationMethods },
+        didDocument: {
+          verificationMethod: verificationMethods,
+          assertionMethod: assertionMethods,
+        },
       }),
     },
     openid4vc: {
@@ -80,6 +85,7 @@ describe('ContributorCredentialService', () => {
   let emMock: ReturnType<typeof createMock<EntityManager>>
   let emForkMock: ReturnType<typeof createMock<EntityManager>>
   let issuerServiceMock: ReturnType<typeof createMock<OpenId4VcIssuerService>>
+  let authServiceClientMock: ReturnType<typeof createMock<AuthServiceClient>>
 
   beforeEach(() => {
     let fakeTenantAgent = buildFakeTenantAgent()
@@ -111,11 +117,16 @@ describe('ContributorCredentialService', () => {
       updateIssuerMetadata: vi.fn().mockResolvedValue({}),
     })
 
+    authServiceClientMock = createMock<AuthServiceClient>({
+      getVerifiedContributor: vi.fn().mockResolvedValue(buildContributor()),
+    })
+
     service = new ContributorCredentialService(
       agentMock,
       mockAgentConfig,
       emMock as unknown as EntityManager,
       issuerServiceMock,
+      authServiceClientMock,
     )
   })
 
@@ -124,7 +135,7 @@ describe('ContributorCredentialService', () => {
   // -------------------------------------------------------------------------
 
   describe('onApplicationBootstrap', () => {
-    it('creates issuer when demo tenant wallet exists and no issuer is registered', async () => {
+    it('creates an OID4VCI issuer when none exists for the demo tenant DID', async () => {
       vi.mocked(emForkMock.findOne).mockResolvedValue({ id: 'User_demo', tenantId: 'tenant-abc' } as any)
       vi.mocked(issuerServiceMock.find).mockResolvedValue([])
 
@@ -186,7 +197,7 @@ describe('ContributorCredentialService', () => {
 
   describe('issueContributorCredential', () => {
     beforeEach(() => {
-      vi.mocked(emMock.findOne).mockResolvedValue(buildBinding())
+      vi.mocked(authServiceClientMock.getVerifiedContributor).mockResolvedValue(buildContributor())
       vi.mocked(emForkMock.findOne).mockResolvedValue({ id: 'User_demo', tenantId: 'tenant-abc' } as any)
     })
 
@@ -194,6 +205,7 @@ describe('ContributorCredentialService', () => {
       const result = await service.issueContributorCredential('11111111')
 
       expect(result).toMatch(/^openid-credential-offer:\/\//)
+      expect(authServiceClientMock.getVerifiedContributor).toHaveBeenCalledWith('11111111')
     })
 
     it('calls createCredentialOffer with the correct credential configuration ID', async () => {
@@ -256,7 +268,7 @@ describe('ContributorCredentialService', () => {
       expect(_sd).not.toContain('walletId')
     })
 
-    it('uses the first verification method from the DID document (deterministic selection)', async () => {
+    it('uses assertionMethod from the DID document with typeof string check', async () => {
       await service.issueContributorCredential('11111111')
 
       const withTenantCb = vi.mocked(agentMock.modules.tenants.withTenantAgent).mock.calls[0][1]
@@ -270,24 +282,64 @@ describe('ContributorCredentialService', () => {
       expect(issuer.did).toBe(FAKE_ISSUER_DID)
     })
 
-    it('throws NotFoundException when no binding exists', async () => {
-      vi.mocked(emMock.findOne).mockReset()
-      vi.mocked(emMock.findOne).mockResolvedValueOnce(null)
+    it('supports assertionMethod when it is an embedded object with id', async () => {
+      const embeddedKeyId = `${FAKE_ISSUER_DID}#key-embedded`
+      const spyTenantAgent = buildFakeTenantAgent({
+        assertionMethods: [{ id: embeddedKeyId }],
+      })
+
+      agentMock.modules.tenants.withTenantAgent = vi.fn().mockImplementation(
+        async (_opts: unknown, cb: (ta: typeof spyTenantAgent) => Promise<void>) => {
+          await cb(spyTenantAgent)
+        },
+      )
+
+      await service.issueContributorCredential('11111111')
+
+      const offerArgs = vi.mocked(spyTenantAgent.openid4vc.issuer.createCredentialOffer).mock.calls[0][0]
+      const { issuer } = offerArgs.issuanceMetadata.credentials[0]
+
+      expect(issuer.didUrl).toBe(embeddedKeyId)
+    })
+
+    it('falls back to verificationMethod when assertionMethod is missing', async () => {
+      const fallbackKeyId = `${FAKE_ISSUER_DID}#key-fallback`
+      const spyTenantAgent = buildFakeTenantAgent({
+        verificationMethods: [{ id: fallbackKeyId }],
+        assertionMethods: [],
+      })
+
+      agentMock.modules.tenants.withTenantAgent = vi.fn().mockImplementation(
+        async (_opts: unknown, cb: (ta: typeof spyTenantAgent) => Promise<void>) => {
+          await cb(spyTenantAgent)
+        },
+      )
+
+      await service.issueContributorCredential('11111111')
+
+      const offerArgs = vi.mocked(spyTenantAgent.openid4vc.issuer.createCredentialOffer).mock.calls[0][0]
+      const { issuer } = offerArgs.issuanceMetadata.credentials[0]
+
+      expect(issuer.didUrl).toBe(fallbackKeyId)
+    })
+
+    it('throws NotFoundException when no binding exists in auth-service', async () => {
+      vi.mocked(authServiceClientMock.getVerifiedContributor).mockRejectedValueOnce(
+        new NotFoundException('No contributor binding found'),
+      )
 
       await expect(service.issueContributorCredential('99999999')).rejects.toThrow(NotFoundException)
     })
 
-    it('throws ConflictException when binding exists but GPG verification is incomplete', async () => {
-      vi.mocked(emMock.findOne).mockReset()
-      const unverifiedBinding = buildBinding({ gpgFingerprint: undefined, verifiedAt: undefined })
-      vi.mocked(emMock.findOne).mockResolvedValueOnce(unverifiedBinding)
+    it('throws ConflictException when GPG verification is incomplete in auth-service', async () => {
+      vi.mocked(authServiceClientMock.getVerifiedContributor).mockRejectedValueOnce(
+        new ConflictException('GPG verification incomplete'),
+      )
 
       await expect(service.issueContributorCredential('11111111')).rejects.toThrow(ConflictException)
     })
 
     it('throws NotFoundException when demo tenant wallet is not initialised', async () => {
-      vi.mocked(emMock.findOne).mockReset()
-      vi.mocked(emMock.findOne).mockResolvedValueOnce(buildBinding())
       vi.mocked(emForkMock.findOne).mockReset()
       vi.mocked(emForkMock.findOne).mockResolvedValueOnce(null)
 
