@@ -46,33 +46,32 @@ The `GithubContributorCredential` uses the following disclosure model:
 
 ### Always Revealed (not wrapped in `_sd`)
 
-| Claim | Reason |
-|-------|--------|
-| `iss` | Issuer DID — verifiers must always know who issued the credential |
-| `iat` | Issuance timestamp — required for freshness checks |
-| `exp` | Expiry timestamp — required for freshness checks |
-| `vct` | Credential type — required so the verifier knows what schema to apply |
-| `credentialStatus` | Revocation reference — verifier must be able to check status |
+| Claim | Type | Reason |
+|-------|------|--------|
+| `iss` | String | Issuer DID — verifiers must always know who issued the credential |
+| `iat` | Integer | Issuance timestamp (Unix timestamp) — required for freshness checks |
+| `exp` | Integer | Expiry timestamp (Unix timestamp) — required for freshness checks |
+| `vct` | String | Credential type identifier (`https://hiero.ledger.org/vct/GithubContributorCredential`) |
+| `githubAccountId` | String | Immutable GitHub numeric account ID (represented as string to prevent 64-bit integer overflow across JSON runtimes) — identity anchor |
+| `verifiedAt` | String | ISO-8601 UTC timestamp of the completed GPG verification |
+| `walletId` | String | Contributor wallet identifier (`User_github:<id>`). *Note: In this development prototype, `walletId` serves as a demo approximation of holder binding; production deployments will bind to hardware-backed holder keys via Key Binding JWT (KB-JWT).* |
 
 ### Selectively Disclosed (wrapped in `_sd`)
 
-| Claim | Reason |
-|-------|--------|
-| `sub` (contributor DID) | The contributor controls when to reveal their DID |
-| `githubUsername` | Not always required; a verifier only needs to confirm _some_ identity was bound |
-| `githubAccountId` | Numeric ID is privacy-sensitive; only disclosed when verifier explicitly requires it |
-| `gpgFingerprint` | GPG key material is private; only disclosed when required for audit purposes |
+| Claim | Type | Reason |
+|-------|------|--------|
+| `githubUsername` | String | GitHub handle at time of verification — selectively disclosable when contributor wishes to prove reputation or link commits |
+| `gpgFingerprint` | String | 40-character uppercase hex GPG key fingerprint — selectively disclosable for commit signature audit verification |
 
 ### Implication
 
-In the standard PR-verification flow, the verifier policy only requires proof that:
+In the standard PR-verification flow, the verifier policy confirms that:
 1. The credential was issued by a trusted Heka issuer (`iss`).
 2. The credential has not expired (`exp`).
 3. The credential type is `GithubContributorCredential` (`vct`).
+4. The GitHub account ID matches the pull request author.
 
-The contributor can satisfy all three requirements **without revealing `githubUsername`,
-`githubAccountId`, or `gpgFingerprint`** to the GitHub App verifier. These claims are
-only disclosed when a maintainer-configured policy explicitly requires them.
+The contributor can satisfy verification while keeping their **`githubUsername`** and raw **`gpgFingerprint`** selectively revealed only when explicitly requested by verifier policy.
 
 ---
 
