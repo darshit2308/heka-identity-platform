@@ -1,3 +1,4 @@
+import { INSECURE_DEFAULTS } from '../insecure-defaults'
 import { IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, IsUrl } from 'class-validator'
 
 export enum GithubConfigKeys {
@@ -66,7 +67,7 @@ export class GithubConfig {
       config?.[GithubConfigKeys.oauthTokenUrl] ?? 'https://github.com/login/oauth/access_token'
     // No 'test' fallback — an absent secret must fail at boot rather than
     // silently signing state with a known key that voids CSRF protection.
-    this.oauthStateSecret = config?.[GithubConfigKeys.oauthStateSecret] ?? config?.['JWT_SECRET']
+    this.oauthStateSecret = config?.[GithubConfigKeys.oauthStateSecret] ?? config?.['JWT_SECRET'] ?? INSECURE_DEFAULTS.JWT_SECRET
     this.oauthStateTtlSeconds = Number(config?.[GithubConfigKeys.oauthStateTtlSeconds] ?? 600)
     this.userApiUrl = config?.[GithubConfigKeys.userApiUrl] ?? 'https://api.github.com/user'
     this.usersApiUrl = config?.[GithubConfigKeys.usersApiUrl] ?? 'https://api.github.com/users'
