@@ -12,6 +12,7 @@ import Home from '@/pages/Home/Home';
 import CredentialOffer from '@/pages/IssueCredential/CredentialOffer/CredentialOffer';
 import IssueCredential from '@/pages/IssueCredential/IssueCredential';
 import { IssueFromTemplate } from '@/pages/IssueCredential/IssueFromTemplate/IssueFromTemplate';
+import GithubCallback from '@/pages/GithubCallback/GithubCallback';
 import Profile from '@/pages/Profile/Profile';
 import SignInView from '@/pages/SignIn/SignIn';
 import SignUpView from '@/pages/SignUp/SignUp';
@@ -33,6 +34,10 @@ const AuthenticatedRoutes = () => (
       <Route
         path={ROUTES.PROFILE}
         element={<Profile />}
+      />
+      <Route
+        path={ROUTES.GITHUB_CALLBACK}
+        element={<GithubCallback />}
       />
       <Route
         path={ROUTES.DEMO}

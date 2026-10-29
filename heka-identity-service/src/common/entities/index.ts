@@ -1,5 +1,6 @@
 import { ContributorAuditEvent } from 'contributor-onboarding/contributor-audit-event.entity'
 import { ContributorBinding } from 'contributor-onboarding/contributor-binding.entity'
+import { OAuthLinkAttempt } from 'contributor-onboarding/oauth-link-attempt.entity'
 import { GpgChallenge } from 'gpg-challenge/gpg-challenge.entity'
 
 import { CredentialStatusList } from './credential-status-list.entity'
@@ -34,6 +35,7 @@ export default [
   Wallet,
   ContributorBinding,
   ContributorAuditEvent,
+  OAuthLinkAttempt,
   GpgChallenge,
   Schema,
   SchemaField,

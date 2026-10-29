@@ -28,6 +28,7 @@ export interface ContributorBinding {
   walletId: string;
   gpgFingerprint?: string;
   verifiedAt?: string;
+  linkedAt?: string;
   updatedAt: string;
 }
 

@@ -1,6 +1,7 @@
 export enum ROUTES {
   MAIN = '/',
   PROFILE = '/profile',
+  GITHUB_CALLBACK = '/github/callback',
   SIGN_IN = '/sign-in',
   SIGN_UP = '/sign-up',
   DEMO = '/demo',

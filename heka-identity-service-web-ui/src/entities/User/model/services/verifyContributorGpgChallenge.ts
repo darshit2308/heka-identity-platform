@@ -2,7 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 
 import { ThunkConfig } from '@/app/providers/StoreProvider';
 import { ContributorBinding } from '@/entities/User/model/types/user';
-import { authEndpoints } from '@/shared/api/config/endpoints';
+import { agencyEndpoints } from '@/shared/api/config/endpoints';
 import { handleError } from '@/shared/api/utils/error';
 
 export interface VerifyContributorGpgChallengeParams {
@@ -25,10 +25,11 @@ export const verifyContributorGpgChallenge = createAsyncThunk<
   const { extra, rejectWithValue, dispatch } = thunkAPI;
 
   try {
-    const response = await extra.authApi.post<VerifyContributorGpgChallengeResult>(
-      authEndpoints.verifyGpgChallenge,
-      body,
-    );
+    const response =
+      await extra.agencyApi.post<VerifyContributorGpgChallengeResult>(
+        agencyEndpoints.verifyGpgChallenge,
+        body,
+      );
     return response.data;
   } catch (error) {
     return handleError(error, rejectWithValue, dispatch);
