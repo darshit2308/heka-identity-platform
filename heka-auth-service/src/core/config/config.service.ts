@@ -44,8 +44,4 @@ export class ConfigService {
   public get throttleConfig() {
     return this.config.throttle
   }
-
-  public get githubConfig() {
-    return this.config.github
-  }
 }

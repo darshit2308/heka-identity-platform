@@ -6,9 +6,6 @@ import { LoadStrategy } from '@mikro-orm/postgresql'
 import { SqlHighlighter } from '@mikro-orm/sql-highlighter'
 import { Logger, NotFoundException } from '@nestjs/common'
 
-import { ContributorAuditEvent, ContributorBinding } from '../../contributor-onboarding'
-import { GpgChallenge } from '../../gpg-challenge/gpg-challenge.entity'
-
 const logger = new Logger('MikroORM')
 
 export const databaseOptions = (config: DbConfig) => ({
@@ -17,7 +14,7 @@ export const databaseOptions = (config: DbConfig) => ({
   dbName: config.name,
   user: config.user,
   password: config.password,
-  entities: [User, Token, ContributorBinding, ContributorAuditEvent, GpgChallenge],
+  entities: [User, Token],
   findOneOrFailHandler: (entityName: string, key: any) => {
     return new NotFoundException(`${entityName} not found for ${JSON.stringify(key)}`)
   },

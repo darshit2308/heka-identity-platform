@@ -85,6 +85,7 @@
     "ipaddr.js": "^2.2.0",
     "minio": "^8.0.7",
     "nestjs-pino": "^3.2.0",
+    "openpgp": "^6.3.2",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pino": "^8.14.1",

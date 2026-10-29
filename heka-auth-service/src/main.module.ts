@@ -11,8 +11,6 @@ import bodyParser from 'body-parser'
 import chalk from 'chalk'
 import { Logger, LoggerErrorInterceptor } from 'nestjs-pino'
 
-import { ContributorOnboardingModule } from './contributor-onboarding'
-import { GpgChallengeModule } from './gpg-challenge/gpg-challenge.module'
 import { HealthModule } from './health'
 import { OAuthModule } from './oauth'
 import { UserModule } from './user'
@@ -38,8 +36,6 @@ import { UserModule } from './user'
     OAuthModule,
     UserModule,
     HealthModule,
-    ContributorOnboardingModule,
-    GpgChallengeModule,
   ],
   providers: [
     {

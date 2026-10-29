@@ -1,5 +1,6 @@
-import { CustomBaseEntity } from '@core/database/entities/custom-base-entity'
 import { Entity, Enum, Index, Property } from '@mikro-orm/decorators/legacy'
+
+import { Identified } from 'common/entities/identified.entity'
 
 export enum ContributorAuditEventType {
   ChallengeRequested = 'ChallengeRequested',
@@ -9,11 +10,17 @@ export enum ContributorAuditEventType {
 }
 
 @Entity({ tableName: 'contributor_onboarding_audit_events' })
-export class ContributorAuditEvent extends CustomBaseEntity {
+export class ContributorAuditEvent extends Identified {
   @Enum({ items: () => ContributorAuditEventType })
   public eventType!: ContributorAuditEventType
 
   @Index()
+  @Property({ type: 'string' })
+  public userId!: string
+
+  @Property({ type: 'string' })
+  public tenantId!: string
+
   @Property({ nullable: true, type: 'string' })
   public githubAccountId?: string
 
@@ -27,19 +34,9 @@ export class ContributorAuditEvent extends CustomBaseEntity {
   @Property({ nullable: true, type: 'string' })
   public gpgFingerprint?: string
 
-  @Property({ type: 'json', nullable: true })
+  @Property({ nullable: true, type: 'json' })
   public metadata?: Record<string, unknown>
 
-  @Property({ onCreate: () => new Date(), type: 'Date' })
+  @Property({ type: 'Date' })
   public createdAt: Date = new Date()
-
-  public constructor(
-    props: Pick<ContributorAuditEvent, 'eventType'> &
-      Partial<
-        Pick<ContributorAuditEvent, 'githubAccountId' | 'githubUsername' | 'walletId' | 'gpgFingerprint' | 'metadata'>
-      >,
-  ) {
-    super()
-    Object.assign(this, props)
-  }
 }
