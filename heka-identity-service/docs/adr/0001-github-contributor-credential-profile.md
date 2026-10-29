@@ -30,10 +30,9 @@ format, DID method, and signing key selection strategy.
 - **OID4VCI and OID4VP compatibility:** The Credo-ts stack already supports SD-JWT VC
   issuance via OID4VCI and presentation via OID4VP. Using the same format end-to-end
   avoids format conversion at presentation time.
-- **Selective disclosure:** Pull-request verification verifiers need to confirm that a
-  contributor is verified, but do not necessarily need to see the contributor's raw GPG
-  fingerprint or numeric account ID. SD-JWT allows the contributor to disclose only
-  what is required by the verifier policy.
+- **Selective disclosure:** Pull-request verification confirms that a contributor is
+  verified. `githubUsername` and `gpgFingerprint` are selectively disclosable.
+  `githubAccountId`, `verifiedAt`, and `walletId` are always present.
 - **Standards trajectory:** SD-JWT VC is on the IETF/W3C standards track and is the
   format being adopted by OID4VC-conformant issuers in production. Using it now prepares
   the prototype for real-world interoperability.
@@ -54,7 +53,7 @@ The `GithubContributorCredential` uses the following disclosure model:
 | `vct` | String | Credential type identifier (`https://hiero.ledger.org/vct/GithubContributorCredential`) |
 | `githubAccountId` | String | Immutable GitHub numeric account ID (represented as string to prevent 64-bit integer overflow across JSON runtimes) — identity anchor |
 | `verifiedAt` | String | ISO-8601 UTC timestamp of the completed GPG verification |
-| `walletId` | String | Contributor wallet identifier (`User_github:<id>`). *Note: In this development prototype, `walletId` serves as a demo approximation of holder binding; production deployments will bind to hardware-backed holder keys via Key Binding JWT (KB-JWT).* |
+| `walletId` | String | The Heka wallet id of the authenticated user (`AuthInfo.walletId`, for example `User_<userId>`). It is not derived from the GitHub account id. Holder binding of the SD-JWT itself is a separate key-binding proof. |
 
 ### Selectively Disclosed (wrapped in `_sd`)
 

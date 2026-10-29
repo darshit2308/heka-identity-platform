@@ -23,7 +23,7 @@ describe('GithubContributorCredential Claims Validation', () => {
       githubUsername: 'darshit2308',
       gpgFingerprint: '3AA5C34371567BD2',
       verifiedAt: '2026-08-20T12:00:00.000Z',
-      walletId: 'User_github:4115704',
+      walletId: 'User_4115704',
     }
     expect(validate(validClaims)).toBe(true)
   })
@@ -34,7 +34,7 @@ describe('GithubContributorCredential Claims Validation', () => {
       githubUsername: 'darshit2308',
       gpgFingerprint: '3AA5C34371567BD2',
       verifiedAt: '2026-08-20T12:00:00.000Z',
-      walletId: 'User_github:4115704',
+      walletId: 'User_4115704',
     }
     expect(validate(invalidClaims)).toBe(false)
   })
@@ -45,7 +45,7 @@ describe('GithubContributorCredential Claims Validation', () => {
       githubUsername: 'darshit2308',
       gpgFingerprint: '3AA5C34371567BD2',
       verifiedAt: '2026-08-20T12:00:00.000Z',
-      walletId: 'User_github:4115704',
+      walletId: 'User_4115704',
     }
     expect(validate(invalidClaims)).toBe(false)
   })
@@ -62,7 +62,7 @@ describe('GithubContributorCredential Claims Validation', () => {
       githubAccountId: '4115704',
       githubUsername: 'darshit2308',
       gpgFingerprint: '3AA5C34371567BD2',
-      walletId: 'User_github:4115704',
+      walletId: 'User_4115704',
     }
     expect(validate(missingVerifiedAt)).toBe(false)
 
@@ -81,7 +81,7 @@ describe('GithubContributorCredential Claims Validation', () => {
       githubUsername: '',
       gpgFingerprint: '3AA5C34371567BD2',
       verifiedAt: '2026-08-20T12:00:00.000Z',
-      walletId: 'User_github:4115704',
+      walletId: 'User_4115704',
     }
     expect(validate(claims)).toBe(false)
   })
@@ -92,7 +92,7 @@ describe('GithubContributorCredential Claims Validation', () => {
       githubUsername: 'darshit2308',
       gpgFingerprint: 'not-a-hex-fingerprint',
       verifiedAt: '2026-08-20T12:00:00.000Z',
-      walletId: 'User_github:4115704',
+      walletId: 'User_4115704',
     }
     expect(validate(claims)).toBe(false)
   })
@@ -114,7 +114,7 @@ describe('GithubContributorCredential Claims Validation', () => {
       githubUsername: 'darshit2308',
       gpgFingerprint: '3AA5C34371567BD2',
       verifiedAt: '2026-08-20T12:00:00.000Z',
-      walletId: 'User_github:4115704',
+      walletId: 'User_4115704',
       extraField: 'should-not-be-here',
     }
     expect(validate(claims)).toBe(false)
