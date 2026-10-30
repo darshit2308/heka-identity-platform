@@ -41,6 +41,7 @@ export interface VerificationSuccess {
 
 export interface VerificationFailure {
   verified: false
+  message?: string
 }
 
 export type VerificationResult = VerificationSuccess | VerificationFailure
@@ -170,19 +171,30 @@ export class GpgChallengeService {
       return { verified: false }
     }
 
-    challenge.verifiedAt = new Date()
-    challenge.gpgFingerprint = verification.gpgFingerprint
-    await this.em.flush()
-
-    await this.contributorOnboardingService.recordProofAccepted({
+    const verifiedAt = new Date()
+    const binding = await this.contributorOnboardingService.recordProofAccepted({
       userId: challenge.userId,
       tenantId: challenge.tenantId,
       githubAccountId: challenge.githubAccountId,
       githubUsername: challenge.githubUsername,
       walletId: challenge.walletId,
       gpgFingerprint: verification.gpgFingerprint,
-      verifiedAt: challenge.verifiedAt,
+      verifiedAt,
     })
+    if (!binding) {
+      this.logger.warn(
+        `Signature matched for challenge ${challengeId}, but the current binding no longer matches that account or wallet`,
+      )
+      return {
+        verified: false,
+        message:
+          'The signature was valid, but the linked GitHub account or wallet changed before it was saved. Request a new challenge and sign it again.',
+      }
+    }
+
+    challenge.verifiedAt = verifiedAt
+    challenge.gpgFingerprint = verification.gpgFingerprint
+    await this.em.flush()
 
     return {
       verified: true,
@@ -193,24 +205,74 @@ export class GpgChallengeService {
     }
   }
 
-  /** Read-only lookup used by the Heka GitHub App. Always returns a status, never 404. */
+  /**
+   * Read-only lookup used by the Heka GitHub App.
+   * The login is resolved to GitHub's numeric account id, then status is read from that binding.
+   * A renamed or reused username cannot be answered from an old challenge row.
+   * Always returns a status for an unknown login. GitHub being unreachable is an error, not "unverified".
+   */
   public async getContributorStatus(githubUsername: string): Promise<ContributorStatus> {
-    const verifiedChallenge = await this.em.findOne(
-      GpgChallenge,
-      { githubUsername, consumed: true, verifiedAt: { $ne: null } },
-      { orderBy: { verifiedAt: 'DESC' } },
-    )
+    const githubAccountId = await this.resolveGithubAccountId(githubUsername)
+    if (!githubAccountId) {
+      return { isVerified: false, githubUsername }
+    }
 
-    if (!verifiedChallenge?.verifiedAt) {
+    const binding = await this.contributorOnboardingService.findBindingByGithubAccountId(githubAccountId)
+    if (!binding?.verifiedAt || !binding.gpgFingerprint) {
       return { isVerified: false, githubUsername }
     }
 
     return {
       isVerified: true,
       githubUsername,
-      gpgFingerprint: verifiedChallenge.gpgFingerprint,
-      verifiedAt: verifiedChallenge.verifiedAt,
+      gpgFingerprint: binding.gpgFingerprint,
+      verifiedAt: binding.verifiedAt,
     }
+  }
+
+  private githubUserUrl(githubUsername: string): string {
+    const apiRoot = this.githubConfig.userApiUrl.replace(/\/user\/?$/, '')
+    return `${apiRoot}/users/${encodeURIComponent(githubUsername)}`
+  }
+
+  private async resolveGithubAccountId(githubUsername: string): Promise<string | null> {
+    if (!GITHUB_USERNAME_PATTERN.test(githubUsername)) {
+      return null
+    }
+
+    let account: { id?: number | string }
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<{ id?: number | string }>(this.githubUserUrl(githubUsername), {
+          timeout: this.githubConfig.requestTimeoutMs,
+          headers: {
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'heka-identity-service',
+          },
+        }),
+      )
+      account = response.data
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status
+        if (status === 404) {
+          return null
+        }
+        if (status === 403 || status === 429) {
+          throw new HttpException(
+            'GitHub API rate limit reached. Please wait a few minutes before retrying.',
+            HttpStatus.TOO_MANY_REQUESTS,
+          )
+        }
+        throw new ServiceUnavailableException('Unable to reach GitHub to resolve this account. Retry shortly.')
+      }
+      throw error
+    }
+
+    if (account?.id === undefined || account.id === null || String(account.id).length === 0) {
+      return null
+    }
+    return String(account.id)
   }
 
   private ownsChallenge(authInfo: AuthInfo, challenge: GpgChallenge): boolean {

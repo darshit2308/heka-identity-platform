@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 
 import type { ContributorBinding } from '@/entities/User/model/types/user';
 
@@ -8,15 +8,41 @@ interface Props {
   binding: ContributorBinding | null;
   credentialIssued: boolean;
   onRequestCredential: () => Promise<void>;
+  onCredentialStored: () => void;
 }
 
-type WalletStatus = 'idle' | 'sending' | 'sent' | 'error' | 'not_installed';
+type WalletStatus = 'idle' | 'sending' | 'sent' | 'received' | 'error' | 'not_installed';
 
-const VerifyStep: React.FC<Props> = ({ binding, credentialIssued, onRequestCredential }) => {
+const VerifyStep: React.FC<Props> = ({
+  binding,
+  credentialIssued,
+  onRequestCredential,
+  onCredentialStored,
+}) => {
   const [walletStatus, setWalletStatus] = useState<WalletStatus>('idle');
+  const [receiveError, setReceiveError] = useState<string | null>(null);
 
   const EXTENSION_SOURCE = 'heka-extension-bridge';
   const HEKA_SOURCE = 'heka-web-wallet-bridge';
+  const stored = credentialIssued || walletStatus === 'received';
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.source !== EXTENSION_SOURCE || event.data?.type !== 'RECEIVE_STATUS') return;
+      const status = event.data.payload as { state?: string; message?: string } | undefined;
+      if (status?.state === 'done') {
+        setReceiveError(null);
+        setWalletStatus('received');
+        onCredentialStored();
+      } else if (status?.state === 'error') {
+        setReceiveError(status.message ?? 'The wallet could not store the credential.');
+        setWalletStatus('error');
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onCredentialStored]);
 
   const handleReceiveInWallet = useCallback(async () => {
     setWalletStatus('sending');
@@ -128,28 +154,28 @@ const VerifyStep: React.FC<Props> = ({ binding, credentialIssued, onRequestCrede
           </div>
         )}
 
-        {walletStatus === 'sent' && (
+        {walletStatus === 'sent' && !stored && (
           <div className={cls.successBox}>
             <span>✅</span>
-            <p>Offer sent to your Heka Web Wallet. Check the extension popup to complete receipt.</p>
+            <p>Offer sent to your Heka Web Wallet. Keep the extension popup open until the credential is stored.</p>
           </div>
         )}
 
         {walletStatus === 'error' && (
           <div className={cls.errorBox}>
             <span>⚠️</span>
-            <p>Failed to send credential offer. Please try again or use your wallet manually.</p>
+            <p>{receiveError ?? 'Failed to send credential offer. Please try again or use your wallet manually.'}</p>
           </div>
         )}
 
-        {(walletStatus === 'idle' || walletStatus === 'error' || walletStatus === 'not_installed') && (
+        {(stored || walletStatus === 'idle' || walletStatus === 'error' || walletStatus === 'not_installed') && (
           <button
             id="receive-in-wallet-btn"
             className={cls.walletBtn}
             onClick={() => void handleReceiveInWallet()}
-            disabled={credentialIssued}
+            disabled={stored}
           >
-            {credentialIssued ? '✓ Credential already in Wallet' : '🔐 Receive into Web Wallet'}
+            {stored ? '✓ Credential already in Wallet' : '🔐 Receive into Web Wallet'}
           </button>
         )}
 

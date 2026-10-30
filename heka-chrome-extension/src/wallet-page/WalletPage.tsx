@@ -103,7 +103,13 @@ async function receiveOffer(offer: string, setFlow: (status: FlowStatus) => void
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Credential receive failed'
     setFlow({ state: 'error', message })
-    await chrome.storage.local.set({ [RECEIVE_STATUS_KEY]: { state: 'error', message } })
+    await chrome.storage.local.set({
+      [PENDING_OFFER_KEY]: offer,
+      [RECEIVE_STATUS_KEY]: {
+        state: 'error',
+        message: `${message} The offer is still saved — retry from this popup.`,
+      },
+    })
   }
 }
 

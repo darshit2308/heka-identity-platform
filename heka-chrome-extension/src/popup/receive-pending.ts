@@ -25,8 +25,12 @@ async function consumePendingOffer(): Promise<void> {
     const message = `Received ${credentials.length} credential${credentials.length === 1 ? '' : 's'}.`
     await chrome.storage.local.set({ [RECEIVE_STATUS_KEY]: { state: 'done', message } })
   } catch (error: unknown) {
-    await chrome.storage.local.remove(PENDING_OFFER_KEY)
     const message = error instanceof Error ? error.message : 'Credential receive failed'
-    await chrome.storage.local.set({ [RECEIVE_STATUS_KEY]: { state: 'error', message } })
+    await chrome.storage.local.set({
+      [RECEIVE_STATUS_KEY]: {
+        state: 'error',
+        message: `${message} The offer is still saved — retry from this popup.`,
+      },
+    })
   }
 }

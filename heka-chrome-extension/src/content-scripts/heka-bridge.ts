@@ -15,6 +15,8 @@
  * prevent arbitrary web pages from triggering wallet actions.
  */
 
+import { RECEIVE_STATUS_KEY } from '../wallet/storage-keys'
+
 const HEKA_MESSAGE_SOURCE = 'heka-web-wallet-bridge'
 const EXTENSION_MESSAGE_SOURCE = 'heka-extension-bridge'
 
@@ -52,3 +54,10 @@ window.postMessage(
   { source: EXTENSION_MESSAGE_SOURCE, type: 'EXTENSION_READY', payload: { version: '0.1.0' } },
   '*',
 )
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return
+  const next = changes[RECEIVE_STATUS_KEY]?.newValue as { state?: string; message?: string } | undefined
+  if (!next?.state || next.state === 'working') return
+  replyToPage('RECEIVE_STATUS', next)
+})

@@ -90,7 +90,7 @@ export class GpgChallengeController {
 
     return {
       verified: false,
-      message: 'Cryptographic verification failed. Ensure you signed the exact nonce string.',
+      message: result.message ?? 'Cryptographic verification failed. Ensure you signed the exact nonce string.',
     }
   }
 
@@ -99,7 +99,8 @@ export class GpgChallengeController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Get GPG verification status for a GitHub login',
-    description: 'Used by the Heka GitHub App. Always returns HTTP 200; read `isVerified`.',
+    description:
+      'Used by the Heka GitHub App. Resolves the login to the current numeric GitHub account id and reads that binding. Always returns HTTP 200 for an unknown login; read `isVerified`.',
   })
   @ApiParam({ name: 'githubUsername', example: 'octocat' })
   @ApiOkResponse({ description: 'Status retrieved.' })

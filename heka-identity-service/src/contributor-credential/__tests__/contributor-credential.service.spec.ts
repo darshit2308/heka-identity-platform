@@ -322,7 +322,47 @@ describe('ContributorCredentialService', () => {
       expect(issuer.didUrl).toBe(embeddedKeyId)
     })
 
-    it('falls back to verificationMethod when assertionMethod is missing', async () => {
+    it('selects #did-root-key from assertionMethod even when another key is first', async () => {
+      const rootKeyId = `${FAKE_ISSUER_DID}#did-root-key`
+      const otherKeyId = `${FAKE_ISSUER_DID}#key-agreement`
+      const spyTenantAgent = buildFakeTenantAgent({
+        verificationMethods: [{ id: otherKeyId }, { id: rootKeyId }],
+        assertionMethods: [otherKeyId, rootKeyId],
+      })
+
+      agentMock.modules.tenants.withTenantAgent = vi
+        .fn()
+        .mockImplementation(async (_opts: unknown, cb: (ta: typeof spyTenantAgent) => Promise<void>) => {
+          await cb(spyTenantAgent)
+        })
+
+      await service.issueContributorCredential(buildAuthInfo())
+
+      const offerArgs = vi.mocked(spyTenantAgent.openid4vc.issuer.createCredentialOffer).mock.calls[0][0]
+      expect(offerArgs.issuanceMetadata.credentials[0].issuer.didUrl).toBe(rootKeyId)
+    })
+
+    it('prefers the ADR assertion-key fragment over the Hedera root key', async () => {
+      const assertionKeyId = `${FAKE_ISSUER_DID}#assertion-key`
+      const rootKeyId = `${FAKE_ISSUER_DID}#did-root-key`
+      const spyTenantAgent = buildFakeTenantAgent({
+        verificationMethods: [{ id: rootKeyId }, { id: assertionKeyId }],
+        assertionMethods: [rootKeyId, assertionKeyId],
+      })
+
+      agentMock.modules.tenants.withTenantAgent = vi
+        .fn()
+        .mockImplementation(async (_opts: unknown, cb: (ta: typeof spyTenantAgent) => Promise<void>) => {
+          await cb(spyTenantAgent)
+        })
+
+      await service.issueContributorCredential(buildAuthInfo())
+
+      const offerArgs = vi.mocked(spyTenantAgent.openid4vc.issuer.createCredentialOffer).mock.calls[0][0]
+      expect(offerArgs.issuanceMetadata.credentials[0].issuer.didUrl).toBe(assertionKeyId)
+    })
+
+    it('throws when assertionMethod is missing instead of using verificationMethod order', async () => {
       const fallbackKeyId = `${FAKE_ISSUER_DID}#key-fallback`
       const spyTenantAgent = buildFakeTenantAgent({
         verificationMethods: [{ id: fallbackKeyId }],
@@ -335,12 +375,7 @@ describe('ContributorCredentialService', () => {
           await cb(spyTenantAgent)
         })
 
-      await service.issueContributorCredential(buildAuthInfo())
-
-      const offerArgs = vi.mocked(spyTenantAgent.openid4vc.issuer.createCredentialOffer).mock.calls[0][0]
-      const { issuer } = offerArgs.issuanceMetadata.credentials[0]
-
-      expect(issuer.didUrl).toBe(fallbackKeyId)
+      await expect(service.issueContributorCredential(buildAuthInfo())).rejects.toThrow(NotFoundException)
     })
 
     it('throws NotFoundException when no verified binding exists for the user', async () => {

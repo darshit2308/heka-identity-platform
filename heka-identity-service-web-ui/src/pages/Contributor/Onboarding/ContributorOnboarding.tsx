@@ -68,6 +68,10 @@ const ContributorOnboarding: React.FC = () => {
     void dispatch(getContributorOnboardingStatus());
   }, [dispatch]);
 
+  const handleCredentialStored = useCallback(() => {
+    dispatch(contributorSlice.actions.setCredentialIssued());
+  }, [dispatch]);
+
   const handleNeedNewChallenge = useCallback(() => {
     dispatch(contributorSlice.actions.setCurrentStep(1));
   }, [dispatch]);
@@ -85,8 +89,7 @@ const ContributorOnboarding: React.FC = () => {
       },
       '*',
     );
-    dispatch(contributorSlice.actions.setCredentialIssued());
-  }, [dispatch]);
+  }, []);
 
   const renderStep = () => {
     switch (currentStep) {
@@ -121,6 +124,7 @@ const ContributorOnboarding: React.FC = () => {
             binding={binding}
             credentialIssued={credentialIssued}
             onRequestCredential={handleRequestCredential}
+            onCredentialStored={handleCredentialStored}
           />
         );
 

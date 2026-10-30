@@ -143,7 +143,7 @@ const SignStep: React.FC<Props> = ({ challenge, onVerified, onNeedNewChallenge }
             your GitHub account (check with <code>gpg --list-secret-keys</code>)
           </li>
           <li>
-            <strong>expired challenge</strong> — Challenges expire after 10 minutes. Click
+            <strong>expired challenge</strong> — Challenges expire after 5 minutes. Click
             &quot;Generate Challenge&quot; again to get a fresh one.
           </li>
           <li>

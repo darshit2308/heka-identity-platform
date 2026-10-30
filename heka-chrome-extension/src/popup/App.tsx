@@ -43,6 +43,7 @@ export const App: React.FC = () => {
   })
 
   const [receiveMessage, setReceiveMessage] = useState<string | null>(null)
+  const [receiveFailed, setReceiveFailed] = useState(false)
 
   const loadWalletState = async () => {
     try {
@@ -59,15 +60,17 @@ export const App: React.FC = () => {
     void loadWalletState()
     ensurePendingReceive()
     chrome.storage.local.get(RECEIVE_STATUS_KEY, (data) => {
-      const status = data[RECEIVE_STATUS_KEY] as { message?: string } | undefined
+      const status = data[RECEIVE_STATUS_KEY] as { state?: string; message?: string } | undefined
       if (status?.message) setReceiveMessage(status.message)
+      setReceiveFailed(status?.state === 'error')
     })
     const onChanged: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
       if (area !== 'local') return
       if (changes[CREDENTIALS_SUMMARY_KEY]) void loadWalletState()
       if (typeof changes[PENDING_OFFER_KEY]?.newValue === 'string') ensurePendingReceive()
-      const next = changes[RECEIVE_STATUS_KEY]?.newValue as { message?: string } | undefined
+      const next = changes[RECEIVE_STATUS_KEY]?.newValue as { state?: string; message?: string } | undefined
       if (next?.message) setReceiveMessage(next.message)
+      if (next?.state) setReceiveFailed(next.state === 'error')
     }
     chrome.storage.onChanged.addListener(onChanged)
     return () => chrome.storage.onChanged.removeListener(onChanged)
@@ -105,6 +108,11 @@ export const App: React.FC = () => {
 
       <main style={s.main}>
         {receiveMessage && <p style={s.receiveNote}>{receiveMessage}</p>}
+        {receiveFailed && (
+          <button type="button" style={s.retryBtn} onClick={() => ensurePendingReceive()}>
+            Retry receive
+          </button>
+        )}
         {wallet.loading ? (
           <div style={s.center}>
             <div style={s.spinnerOuter}>

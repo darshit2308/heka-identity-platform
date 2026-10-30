@@ -50,7 +50,7 @@ const ChallengeStep: React.FC<Props> = ({
       <ul className={cls.infoList}>
         <li>
           <span className={cls.infoIcon}>⏱️</span>
-          <span>The challenge expires in 10 minutes — sign it promptly</span>
+          <span>The challenge expires in 5 minutes — sign it promptly</span>
         </li>
         <li>
           <span className={cls.infoIcon}>🔐</span>

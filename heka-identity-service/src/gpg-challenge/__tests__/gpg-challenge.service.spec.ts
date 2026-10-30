@@ -79,6 +79,7 @@ describe('GpgChallengeService', () => {
     recordChallengeRequested: ReturnType<typeof vi.fn>
     recordProofAccepted: ReturnType<typeof vi.fn>
     recordProofRejected: ReturnType<typeof vi.fn>
+    findBindingByGithubAccountId: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -93,8 +94,9 @@ describe('GpgChallengeService', () => {
     onboarding = {
       getRequiredBindingForUser: vi.fn(),
       recordChallengeRequested: vi.fn().mockResolvedValue(undefined),
-      recordProofAccepted: vi.fn().mockResolvedValue(undefined),
+      recordProofAccepted: vi.fn().mockResolvedValue({ githubAccountId: '4115704' }),
       recordProofRejected: vi.fn().mockResolvedValue(undefined),
+      findBindingByGithubAccountId: vi.fn(),
     }
 
     service = new GpgChallengeService(
@@ -280,26 +282,77 @@ describe('GpgChallengeService', () => {
         expect.objectContaining({ gpgFingerprint: expectedFingerprint, userId: 'user-1' }),
       )
     }, 30_000)
+
+    it('does not report verified when the current binding was not updated', async () => {
+      const challenge = buildChallenge()
+      em.findOne.mockResolvedValue(challenge)
+      onboarding.recordProofAccepted.mockResolvedValue(undefined)
+      const signingKey = await openpgp.generateKey({
+        type: 'ecc',
+        curve: 'curve25519Legacy',
+        userIDs: [{ name: 'Signer', email: 'signer@example.com' }],
+      })
+      const privateKey = await openpgp.readPrivateKey({ armoredKey: signingKey.privateKey })
+      const cleartext = await openpgp.createCleartextMessage({ text: challenge.nonce })
+      const armoredMessage = await openpgp.sign({ message: cleartext, signingKeys: privateKey })
+      httpService.get.mockReturnValue(of({ data: signingKey.publicKey }))
+
+      const result = await service.verifySignature(auth(), challenge.id, armoredMessage)
+
+      expect(result).toMatchObject({ verified: false })
+      expect(challenge.verifiedAt).toBeUndefined()
+      expect(challenge.gpgFingerprint).toBeUndefined()
+    }, 30_000)
   })
 
   describe('getContributorStatus', () => {
-    it('returns unverified when no successful challenge exists', async () => {
-      em.findOne.mockResolvedValue(null)
+    it('returns unverified when GitHub has no such login', async () => {
+      httpService.get.mockReturnValue(throwError(() => axiosErrorWithStatus(404)))
+
       await expect(service.getContributorStatus('test-contributor')).resolves.toEqual({
         isVerified: false,
         githubUsername: 'test-contributor',
       })
+      expect(onboarding.findBindingByGithubAccountId).not.toHaveBeenCalled()
     })
 
-    it('returns the latest successful verification', async () => {
-      const verifiedAt = new Date('2026-07-06T09:00:00Z')
-      em.findOne.mockResolvedValue(buildChallenge({ consumed: true, verifiedAt, gpgFingerprint: 'ABCDEF123456' }))
+    it('returns unverified when the current account binding has no proof', async () => {
+      httpService.get.mockReturnValue(of({ data: { id: 4115704, login: 'test-contributor' } }))
+      onboarding.findBindingByGithubAccountId.mockResolvedValue({
+        githubAccountId: '4115704',
+        githubUsername: 'old-name',
+        verifiedAt: null,
+        gpgFingerprint: null,
+      })
 
-      await expect(service.getContributorStatus('test-contributor')).resolves.toMatchObject({
-        isVerified: true,
+      await expect(service.getContributorStatus('test-contributor')).resolves.toEqual({
+        isVerified: false,
+        githubUsername: 'test-contributor',
+      })
+      expect(onboarding.findBindingByGithubAccountId).toHaveBeenCalledWith('4115704')
+      expect(em.findOne).not.toHaveBeenCalled()
+    })
+
+    it('reads verification from the account-id binding after a username change', async () => {
+      const verifiedAt = new Date('2026-07-06T09:00:00Z')
+      httpService.get.mockReturnValue(of({ data: { id: 4115704, login: 'renamed' } }))
+      onboarding.findBindingByGithubAccountId.mockResolvedValue({
+        githubAccountId: '4115704',
+        githubUsername: 'old-name',
         gpgFingerprint: 'ABCDEF123456',
         verifiedAt,
       })
+
+      await expect(service.getContributorStatus('renamed')).resolves.toMatchObject({
+        isVerified: true,
+        githubUsername: 'renamed',
+        gpgFingerprint: 'ABCDEF123456',
+        verifiedAt,
+      })
+      expect(httpService.get).toHaveBeenCalledWith(
+        'https://api.github.com/users/renamed',
+        expect.objectContaining({ headers: expect.objectContaining({ 'User-Agent': 'heka-identity-service' }) }),
+      )
     })
   })
 })

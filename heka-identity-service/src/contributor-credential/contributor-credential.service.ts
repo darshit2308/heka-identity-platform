@@ -1,3 +1,4 @@
+import { DidDocument } from '@credo-ts/core'
 import { OpenId4VciCredentialFormatProfile } from '@credo-ts/openid4vc'
 import { EntityManager } from '@mikro-orm/core'
 import { Inject, Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common'
@@ -139,26 +140,8 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
         )
       }
 
-      // Resolve the verification method / assertion method deterministically from the DID document
       const { didDocument } = await tenantAgent.dids.resolve(issuerDid)
-      let issuerDidUrl: string | undefined
-      const amEntry = didDocument?.assertionMethod?.[0]
-      if (typeof amEntry === 'string') {
-        issuerDidUrl = amEntry
-      } else if (
-        amEntry &&
-        typeof amEntry === 'object' &&
-        'id' in amEntry &&
-        typeof (amEntry as { id?: unknown }).id === 'string'
-      ) {
-        issuerDidUrl = (amEntry as { id: string }).id
-      } else if (didDocument?.verificationMethod?.[0]?.id) {
-        issuerDidUrl = didDocument.verificationMethod[0].id
-      }
-
-      if (!issuerDidUrl) {
-        throw new NotFoundException(`Unable to resolve signing key for issuer DID: ${issuerDid}`)
-      }
+      const issuerDidUrl = this.selectAssertionKeyId(issuerDid, didDocument)
 
       const payload = this.buildPayload(contributor)
       const disclosureFrame = this.buildDisclosureFrame()
@@ -370,5 +353,51 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
     const em = this.em.fork()
     const wallet = await em.findOne(Wallet, { id: walletId })
     return wallet?.tenantId
+  }
+
+  /**
+   * Credential signing uses an assertion-purpose key, resolved with Credo's
+   * `dereferenceKey`. `#assertion-key` is the purpose fragment from the profile ADR.
+   * Hedera issuer DIDs publish that key as `#did-root-key`. A single other assertion
+   * method is used only when neither of those fragments is present. The first
+   * verification method is never a fallback: that array is not ordered by purpose.
+   */
+  private selectAssertionKeyId(issuerDid: string, didDocument: unknown): string {
+    const document = this.asDidDocument(issuerDid, didDocument)
+    if (!document) {
+      throw new NotFoundException(`Unable to resolve signing key for issuer DID: ${issuerDid}`)
+    }
+
+    for (const keyId of ['#assertion-key', '#did-root-key']) {
+      const resolved = this.dereferenceAssertionKey(document, keyId)
+      if (resolved) return resolved
+    }
+
+    const assertionMethods = document.assertionMethod ?? []
+    if (assertionMethods.length === 1) {
+      const only = assertionMethods[0]
+      const keyId = typeof only === 'string' ? only : only.id
+      const resolved = this.dereferenceAssertionKey(document, keyId)
+      if (resolved) return resolved
+    }
+
+    throw new NotFoundException(
+      `Unable to resolve an assertion key for issuer DID: ${issuerDid}. Expected #assertion-key or #did-root-key.`,
+    )
+  }
+
+  private asDidDocument(issuerDid: string, didDocument: unknown): DidDocument | undefined {
+    if (!didDocument || typeof didDocument !== 'object') return undefined
+    if (didDocument instanceof DidDocument) return didDocument
+    const source = didDocument as ConstructorParameters<typeof DidDocument>[0]
+    return new DidDocument({ ...source, id: source.id || issuerDid })
+  }
+
+  private dereferenceAssertionKey(document: DidDocument, keyId: string): string | undefined {
+    try {
+      return document.dereferenceKey(keyId, ['assertionMethod']).id
+    } catch {
+      return undefined
+    }
   }
 }

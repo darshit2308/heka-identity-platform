@@ -2026,8 +2026,9 @@ paths:
     get:
       description: Returns whether the contributor has completed GPG ownership
         verification. Used by the Heka GitHub App to post an appropriate
-        check-run result. Always returns HTTP 200; check the `isVerified` field
-        for the outcome.
+        check-run result. The login is resolved to the current numeric GitHub
+        account id, and status is read from that binding. Always returns HTTP
+        200 for an unknown login; check the `isVerified` field for the outcome.
       operationId: GpgChallengeController_getStatus
       parameters:
         - name: githubUsername

@@ -289,6 +289,11 @@ export class ContributorOnboardingService {
     await this.em.flush()
   }
 
+  /** Current link for a GitHub account. Usernames are not stable, so callers resolve the numeric id first. */
+  public findBindingByGithubAccountId(githubAccountId: string): Promise<ContributorBinding | null> {
+    return this.em.findOne(ContributorBinding, { githubAccountId })
+  }
+
   private async findBinding(tenantId: string, userId: string): Promise<ContributorBinding | null> {
     return this.em.findOne(ContributorBinding, { tenantId, userId })
   }
