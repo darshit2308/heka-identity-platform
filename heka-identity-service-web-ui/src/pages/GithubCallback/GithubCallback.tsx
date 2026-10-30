@@ -30,7 +30,7 @@ const GithubCallback = () => {
       toast.error(
         'GitHub did not return the parameters needed to link the account.',
       );
-      navigate(ROUTES.PROFILE);
+      navigate(ROUTES.CONTRIBUTOR);
       return;
     }
 
@@ -38,11 +38,11 @@ const GithubCallback = () => {
       .unwrap()
       .then((result) => {
         toast.success(`Linked GitHub account @${result.githubUsername}.`);
-        navigate(ROUTES.PROFILE);
+        navigate(ROUTES.CONTRIBUTOR_ONBOARDING);
       })
       .catch(() => {
         toast.error('GitHub account linking failed. Please try again.');
-        navigate(ROUTES.PROFILE);
+        navigate(ROUTES.CONTRIBUTOR);
       })
       .finally(() => {
         setIsLoading(false);

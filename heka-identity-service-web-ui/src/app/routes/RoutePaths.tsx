@@ -25,7 +25,6 @@ export enum ROUTES {
   // ── Contributor onboarding ─────────────────────────────────────────────
   CONTRIBUTOR = '/contributor',
   CONTRIBUTOR_ONBOARDING = '/contributor/onboarding',
-  CONTRIBUTOR_GITHUB_CALLBACK = '/contributor/github/callback',
 }
 
 export default ROUTES;

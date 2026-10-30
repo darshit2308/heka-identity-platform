@@ -1,22 +1,4 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { IsNotEmpty, IsString } from 'class-validator'
-
-export class ContributorCredentialOfferRequestDto {
-  /**
-   * The contributor's immutable GitHub numeric account ID.
-   * This is the binding anchor used to look up the verified
-   * `ContributorBinding` record.
-   *
-   * @example "12345678"
-   */
-  @ApiProperty({
-    description: "The contributor's immutable GitHub numeric account ID",
-    example: '12345678',
-  })
-  @IsString()
-  @IsNotEmpty()
-  public githubAccountId!: string
-}
 
 export class ContributorCredentialOfferResponseDto {
   /**

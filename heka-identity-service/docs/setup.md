@@ -297,22 +297,20 @@ API requests must carry a Bearer token signed with `JWT_SECRET`. The default val
 | `JWT_VERIFY_OPTIONS_ISSUER`   | `Heka`                  | Required value of the `iss` claim.                                                |
 | `JWT_VERIFY_OPTIONS_AUDIENCE` | `Heka Identity Service` | Required value of the `aud` claim.                                                |
 
-### Contributor GitHub OAuth
+### Contributor GitHub linking
 
-Contributor onboarding uses GitHub OAuth before creating the GPG challenge. For local development, create a GitHub OAuth app and set its callback URL to `http://localhost:8000/contributor/github/callback`.
+A signed-in Heka user links a GitHub account before the GPG challenge. Linking does not create a session. For local development, create a GitHub OAuth app and set its callback URL to the web UI route `http://localhost:3000/github/callback`. That page posts the code to `POST /v2/contributor-onboarding/github/link/callback`.
 
-| Variable                         | Default                                            | Description                                                          |
-| -------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------- |
-| `GITHUB_OAUTH_CLIENT_ID`         | _(unset)_                                          | GitHub OAuth app client ID. Required for contributor onboarding.     |
-| `GITHUB_OAUTH_CLIENT_SECRET`     | _(unset)_                                          | GitHub OAuth app client secret. Required for contributor onboarding. |
-| `GITHUB_OAUTH_REDIRECT_URI`      | _(unset)_                                          | OAuth callback URL registered with GitHub.                           |
-| `GITHUB_OAUTH_STATE_SECRET`      | `JWT_SECRET` or `test`                             | HMAC secret used to sign OAuth state values.                         |
-| `GITHUB_OAUTH_STATE_TTL_SECONDS` | `600`                                              | OAuth state lifetime in seconds.                                     |
-| `GITHUB_OAUTH_AUTHORIZE_URL`     | `https://github.com/login/oauth/authorize`         | Override only for tests or GitHub Enterprise.                        |
-| `GITHUB_OAUTH_TOKEN_URL`         | `https://github.com/login/oauth/access_token`      | Override only for tests or GitHub Enterprise.                        |
-| `GITHUB_USER_API_URL`            | `https://api.github.com/user`                      | Authenticated GitHub user endpoint.                                  |
-| `GITHUB_USERS_API_URL`           | `https://api.github.com/users`                     | Public GitHub users endpoint.                                        |
-| `GITHUB_REQUEST_TIMEOUT_MS`      | `8000`                                             | Timeout for outbound GitHub API requests.                            |
+| Variable                    | Default                                    | Description                                                      |
+| --------------------------- | ------------------------------------------ | ---------------------------------------------------------------- |
+| `GITHUB_CLIENT_ID`          | _(unset)_                                  | GitHub OAuth app client ID. Required to start linking.          |
+| `GITHUB_CLIENT_SECRET`      | _(unset)_                                  | GitHub OAuth app client secret. Required to exchange the code.  |
+| `GITHUB_CALLBACK_URL`       | _(unset)_                                  | Callback URL registered with GitHub. Must match the token exchange. |
+| `GITHUB_OAUTH_AUTHORIZE_URL`| `https://github.com/login/oauth/authorize` | Override only for tests or GitHub Enterprise.                    |
+| `GITHUB_OAUTH_TOKEN_URL`    | `https://github.com/login/oauth/access_token` | Override only for tests or GitHub Enterprise.                 |
+| `GITHUB_USER_API_URL`       | `https://api.github.com/user`              | Authenticated GitHub user endpoint.                              |
+| `GITHUB_GPG_KEY_BASE_URL`   | `https://github.com`                       | Host for `https://github.com/<username>.gpg`.                    |
+| `GITHUB_REQUEST_TIMEOUT_MS` | `8000`                                     | Timeout for outbound GitHub requests.                            |
 
 #### Required JWT claims
 

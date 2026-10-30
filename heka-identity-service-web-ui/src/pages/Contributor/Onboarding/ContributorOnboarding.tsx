@@ -13,7 +13,6 @@ import {
   getContributorGithubUsername,
   getContributorIsLoading,
   getContributorStep,
-  getContributorToken,
 } from '@/entities/Contributor/model/contributorSelectors';
 import { contributorSlice } from '@/entities/Contributor/model/contributorSlice';
 import { getContributorOnboardingStatus } from '@/entities/User/model/services/getContributorOnboardingStatus';
@@ -42,7 +41,6 @@ const ContributorOnboarding: React.FC = () => {
   const isLoading        = useSelector(getContributorIsLoading);
   const error            = useSelector(getContributorError);
   const githubUsername   = useSelector(getContributorGithubUsername);
-  const contributorToken = useSelector(getContributorToken);
 
   // Load the current onboarding status on mount so we can fast-forward
   // the wizard if the user has already completed some steps.
@@ -71,15 +69,8 @@ const ContributorOnboarding: React.FC = () => {
   }, [dispatch]);
 
   const handleRequestCredential = useCallback(async () => {
-    const headers: Record<string, string> = {};
-    if (contributorToken) {
-      headers['Authorization'] = `Bearer ${contributorToken}`;
-    }
-
     const response = await $agencyApi.post<{ credentialOffer: string }>(
       agencyEndpoints.contributorCredentialOffer,
-      {},
-      { headers },
     );
 
     window.postMessage(
@@ -91,7 +82,7 @@ const ContributorOnboarding: React.FC = () => {
       '*',
     );
     dispatch(contributorSlice.actions.setCredentialIssued());
-  }, [contributorToken, dispatch]);
+  }, [dispatch]);
 
   const renderStep = () => {
     switch (currentStep) {

@@ -14,8 +14,8 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 import { getContributorOnboardingStatus } from '@/entities/User/model/services/getContributorOnboardingStatus';
-import { getGithubAuthorizationUrl } from '@/entities/User/model/services/getGithubAuthorizationUrl';
 import { requestContributorGpgChallenge, ContributorGpgChallenge } from '@/entities/User/model/services/requestContributorGpgChallenge';
+import { startGithubLink } from '@/entities/User/model/services/startGithubLink';
 import { verifyContributorGpgChallenge, VerifyContributorGpgChallengeResult } from '@/entities/User/model/services/verifyContributorGpgChallenge';
 import { ContributorBinding, ContributorOnboardingStatus } from '@/entities/User/model/types/user';
 
@@ -44,8 +44,6 @@ export interface ContributorState {
   isLoading: boolean;
   /** Error message from the most recent failed action. */
   error: string | null;
-  /** Short-lived JWT issued after GPG verification for credential offer. */
-  contributorToken: string | null;
 }
 
 const initialState: ContributorState = {
@@ -60,7 +58,6 @@ const initialState: ContributorState = {
   credentialIssued: false,
   isLoading: false,
   error: null,
-  contributorToken: null,
 };
 
 export const contributorSlice = createSlice({
@@ -97,18 +94,17 @@ export const contributorSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
-    // ── getGithubAuthorizationUrl ─────────────────────────────────────────
     builder
-      .addCase(getGithubAuthorizationUrl.pending, (state) => {
+      .addCase(startGithubLink.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(getGithubAuthorizationUrl.fulfilled, (state) => {
+      .addCase(startGithubLink.fulfilled, (state) => {
         state.isLoading = false;
       })
-      .addCase(getGithubAuthorizationUrl.rejected, (state, action) => {
+      .addCase(startGithubLink.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = (action.payload as string) ?? 'Failed to get GitHub authorization URL';
+        state.error = (action.payload as string) ?? 'Failed to start GitHub account linking';
       });
 
     // ── getContributorOnboardingStatus ───────────────────────────────────
@@ -194,9 +190,6 @@ export const contributorSlice = createSlice({
         (state, action: PayloadAction<VerifyContributorGpgChallengeResult>) => {
           state.isLoading = false;
           state.verificationResult = action.payload;
-          if (action.payload.contributorToken) {
-            state.contributorToken = action.payload.contributorToken;
-          }
           if (action.payload.verified) {
             state.binding = action.payload.binding ?? null;
             if (!state.completedSteps.includes(2)) {

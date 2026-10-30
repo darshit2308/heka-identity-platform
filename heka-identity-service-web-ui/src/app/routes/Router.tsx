@@ -7,15 +7,14 @@ import AuthenticatedLayout from '@/components/Layout/AuthenticatedLayout';
 import UnauthenticatedLayout from '@/components/Layout/UnauthenticatedLayout';
 import { getUserIsSignedIn } from '@/entities/User/model/selectors/userSelector';
 import AgeVerificationDemo from '@/pages/AgeVerificationDemo/AgeVerificationDemo';
-import ContributorGithubCallback from '@/pages/Contributor/ContributorGithubCallback';
 import ContributorHub from '@/pages/Contributor/ContributorHub';
 import ContributorOnboarding from '@/pages/Contributor/Onboarding/ContributorOnboarding';
 import Demo from '@/pages/Demo/Demo';
+import GithubCallback from '@/pages/GithubCallback/GithubCallback';
 import Home from '@/pages/Home/Home';
 import CredentialOffer from '@/pages/IssueCredential/CredentialOffer/CredentialOffer';
 import IssueCredential from '@/pages/IssueCredential/IssueCredential';
 import { IssueFromTemplate } from '@/pages/IssueCredential/IssueFromTemplate/IssueFromTemplate';
-import GithubCallback from '@/pages/GithubCallback/GithubCallback';
 import Profile from '@/pages/Profile/Profile';
 import SignInView from '@/pages/SignIn/SignIn';
 import SignUpView from '@/pages/SignUp/SignUp';
@@ -74,12 +73,9 @@ const AuthenticatedRoutes = () => (
         path={ROUTES.VERIFICATION_REQUEST}
         element={<VerificationRequest />}
       />
-      <Route path="*" element={<Navigate to={ROUTES.MAIN} />} />
-
-      {/* Contributor routes (accessible regardless of regular auth) */}
       <Route path={ROUTES.CONTRIBUTOR} element={<ContributorHub />} />
       <Route path={ROUTES.CONTRIBUTOR_ONBOARDING} element={<ContributorOnboarding />} />
-      <Route path={ROUTES.CONTRIBUTOR_GITHUB_CALLBACK} element={<ContributorGithubCallback />} />
+      <Route path="*" element={<Navigate to={ROUTES.MAIN} />} />
     </Route>
   </Routes>
 );
@@ -102,10 +98,6 @@ const UnauthenticatedRoutes = () => (
       />
       <Route path="*" element={<Navigate to={ROUTES.MAIN} />} />
 
-      {/* Contributor routes (public — no regular auth needed) */}
-      <Route path={ROUTES.CONTRIBUTOR} element={<ContributorHub />} />
-      <Route path={ROUTES.CONTRIBUTOR_ONBOARDING} element={<ContributorOnboarding />} />
-      <Route path={ROUTES.CONTRIBUTOR_GITHUB_CALLBACK} element={<ContributorGithubCallback />} />
     </Route>
     <Route element={<UnauthenticatedLayout />}>
       <Route

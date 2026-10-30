@@ -71,11 +71,7 @@ const desktopMenuItems: Array<DesktopMenuItem> = [
     icon: <UserIcon {...desktopIconProps} />,
     title: 'Contributor Hub',
     route: ROUTES.CONTRIBUTOR,
-    active: [
-      ROUTES.CONTRIBUTOR,
-      ROUTES.CONTRIBUTOR_ONBOARDING,
-      ROUTES.CONTRIBUTOR_GITHUB_CALLBACK,
-    ],
+    active: [ROUTES.CONTRIBUTOR, ROUTES.CONTRIBUTOR_ONBOARDING],
   },
 ];
 
@@ -95,8 +91,7 @@ export const DesktopNavigationMenu = () => {
 
   const onNavigate = useCallback(
     (route: string) => {
-      // Contributor Hub is public — no sign-in required
-      if (!isSignedIn && route !== ROUTES.MAIN && route !== ROUTES.CONTRIBUTOR) {
+      if (!isSignedIn && route !== ROUTES.MAIN) {
         navigate(ROUTES.SIGN_IN);
         return;
       }
@@ -195,11 +190,7 @@ const mobileMenuItems: Array<DesktopMenuItem> = [
     icon: <UserIcon {...mobileIconProps} />,
     title: 'Contributor Hub',
     route: ROUTES.CONTRIBUTOR,
-    active: [
-      ROUTES.CONTRIBUTOR,
-      ROUTES.CONTRIBUTOR_ONBOARDING,
-      ROUTES.CONTRIBUTOR_GITHUB_CALLBACK,
-    ],
+    active: [ROUTES.CONTRIBUTOR, ROUTES.CONTRIBUTOR_ONBOARDING],
   },
 ];
 
@@ -212,8 +203,7 @@ export const MobileNavigationMenu = () => {
 
   const onNavigate = useCallback(
     (route: string) => {
-      // Contributor Hub is public — no sign-in required
-      if (!isSignedIn && route !== ROUTES.MAIN && route !== ROUTES.CONTRIBUTOR) {
+      if (!isSignedIn && route !== ROUTES.MAIN) {
         navigate(ROUTES.SIGN_IN);
         return;
       }
