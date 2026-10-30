@@ -204,16 +204,19 @@ describe('ContributorOnboardingService', () => {
       expect(attempt!.expiresAt.getTime()).toBeGreaterThan(Date.now() + 4 * 60 * 1000)
     })
 
-    it('rejects a replayed, expired, or unknown state', async () => {
+    it('consumes OAuth state only for the authenticated user and tenant', async () => {
       em.nativeUpdate.mockResolvedValue(0)
       await expect(service.completeGithubLink(auth(), 'code', 'state')).rejects.toThrow(UnauthorizedException)
+      expect(em.nativeUpdate).toHaveBeenCalledWith(
+        OAuthLinkAttempt,
+        expect.objectContaining({
+          userId: 'user-1',
+          tenantId: 'tenant-1',
+          status: LinkAttemptStatus.Pending,
+        }),
+        { status: LinkAttemptStatus.Consumed },
+      )
       expect(http.post).not.toHaveBeenCalled()
-    })
-
-    it('rejects a state that belongs to another user after consuming it', async () => {
-      em.nativeUpdate.mockResolvedValue(1)
-      em.findOneOrFail.mockResolvedValue({ userId: 'user-2', tenantId: 'tenant-1', codeVerifier: 'verifier' })
-      await expect(service.completeGithubLink(auth(), 'code', 'state')).rejects.toThrow(ForbiddenException)
     })
 
     it('rejects a GitHub account already linked to someone else', async () => {

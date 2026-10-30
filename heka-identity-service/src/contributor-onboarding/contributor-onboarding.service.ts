@@ -149,17 +149,24 @@ export class ContributorOnboardingService {
     const stateHash = this.sha256(stateToken)
     const consumed = await this.em.nativeUpdate(
       OAuthLinkAttempt,
-      { stateHash, status: LinkAttemptStatus.Pending, expiresAt: { $gt: new Date() } },
+      {
+        stateHash,
+        userId: authInfo.userId,
+        tenantId: authInfo.tenantId,
+        status: LinkAttemptStatus.Pending,
+        expiresAt: { $gt: new Date() },
+      },
       { status: LinkAttemptStatus.Consumed },
     )
     if (consumed === 0) {
       throw new UnauthorizedException('Invalid, expired, or already-consumed OAuth state')
     }
 
-    const attempt = await this.em.findOneOrFail(OAuthLinkAttempt, { stateHash })
-    if (attempt.userId !== authInfo.userId || attempt.tenantId !== authInfo.tenantId) {
-      throw new ForbiddenException('OAuth state does not belong to this user')
-    }
+    const attempt = await this.em.findOneOrFail(OAuthLinkAttempt, {
+      stateHash,
+      userId: authInfo.userId,
+      tenantId: authInfo.tenantId,
+    })
 
     const accessToken = await this.exchangeCodeForToken(code, attempt.codeVerifier)
     const githubUser = await this.fetchGithubUser(accessToken)
