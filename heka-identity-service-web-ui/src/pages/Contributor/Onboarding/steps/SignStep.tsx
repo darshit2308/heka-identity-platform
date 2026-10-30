@@ -9,13 +9,15 @@ import * as cls from './Step.module.scss';
 interface Props {
   challenge: ContributorGpgChallenge;
   onVerified: () => void;
+  onNeedNewChallenge: () => void;
 }
 
-const SignStep: React.FC<Props> = ({ challenge, onVerified }) => {
+const SignStep: React.FC<Props> = ({ challenge, onVerified, onNeedNewChallenge }) => {
   const dispatch = useAppDispatch();
   const [signature, setSignature] = useState('');
   const [copied, setCopied] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [rejection, setRejection] = useState<string | null>(null);
 
   const gpgCommand = `echo -n "${challenge.nonce}" | gpg --clearsign --armor`;
 
@@ -28,16 +30,28 @@ const SignStep: React.FC<Props> = ({ challenge, onVerified }) => {
   const handleSubmit = useCallback(async () => {
     if (!signature.trim()) return;
     setIsSubmitting(true);
+    setRejection(null);
     try {
-      await dispatch(
+      const result = await dispatch(
         verifyContributorGpgChallenge({
           challengeId: challenge.challengeId,
           signature: signature.trim(),
         }),
       ).unwrap();
+      if (!result.verified) {
+        setRejection(
+          result.message ||
+            'The signature was not accepted. This challenge was used, so generate a new one and sign it again.',
+        );
+        return;
+      }
       onVerified();
-    } catch {
-      // Error handled in slice
+    } catch (err) {
+      setRejection(
+        typeof err === 'string'
+          ? err
+          : 'GPG signature verification failed. Generate a new challenge and try again.',
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -146,6 +160,21 @@ const SignStep: React.FC<Props> = ({ challenge, onVerified }) => {
           </li>
         </ul>
       </div>
+
+      {rejection && (
+        <div className={cls.errorHints} role="alert">
+          <p className={cls.errorHintsTitle}>Signature not accepted</p>
+          <p>{rejection}</p>
+          <button
+            id="new-challenge-btn"
+            className={`${cls.primaryBtn} ${cls.retryBtn}`}
+            type="button"
+            onClick={onNeedNewChallenge}
+          >
+            Generate a new challenge
+          </button>
+        </div>
+      )}
 
       <button
         id="submit-signature-btn"

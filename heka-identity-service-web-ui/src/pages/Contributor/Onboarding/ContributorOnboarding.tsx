@@ -68,6 +68,10 @@ const ContributorOnboarding: React.FC = () => {
     void dispatch(getContributorOnboardingStatus());
   }, [dispatch]);
 
+  const handleNeedNewChallenge = useCallback(() => {
+    dispatch(contributorSlice.actions.setCurrentStep(1));
+  }, [dispatch]);
+
   const handleRequestCredential = useCallback(async () => {
     const response = await $agencyApi.post<{ credentialOffer: string }>(
       agencyEndpoints.contributorCredentialOffer,
@@ -107,6 +111,7 @@ const ContributorOnboarding: React.FC = () => {
           <SignStep
             challenge={activeChallenge}
             onVerified={handleVerified}
+            onNeedNewChallenge={handleNeedNewChallenge}
           />
         );
 
