@@ -1,10 +1,14 @@
-import { CREDENTIAL_COUNT_KEY, PENDING_OFFER_KEY, RECEIVE_STATUS_KEY } from '../wallet/storage-keys'
+import { isCredentialOfferUri, isPresentationRequestUri } from '../content-scripts/bridge-message'
+import { walletPageUrl } from '../wallet/page-url'
+import { CREDENTIAL_COUNT_KEY, PENDING_OFFER_KEY, PENDING_REQUEST_KEY, RECEIVE_STATUS_KEY } from '../wallet/storage-keys'
 
 // ── Types for cross-context messages ─────────────────────────────────────────
 
 export type ExtensionMessage =
   | { type: 'PING' }
-  | { type: 'RECEIVE_OFFER'; offerUri: string }
+  | { type: 'RECEIVE_OFFER'; offerUri: string; expiresAt?: string }
+  | { type: 'PRESENT_REQUEST'; requestUri: string }
+  | { type: 'OPEN_WALLET' }
   | { type: 'WALLET_TASK_DONE' }
   | { type: 'REFRESH_BADGE' }
   | { type: 'GET_STATUS' }
@@ -17,7 +21,7 @@ export type ExtensionResponse =
 
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
-    void chrome.storage.local.remove([PENDING_OFFER_KEY, RECEIVE_STATUS_KEY])
+    void chrome.storage.local.remove([PENDING_OFFER_KEY, PENDING_REQUEST_KEY, RECEIVE_STATUS_KEY])
   }
   void updateBadge()
 })
@@ -25,9 +29,13 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.runtime.onMessage.addListener(
   (
     message: ExtensionMessage,
-    _sender: chrome.runtime.MessageSender,
+    sender: chrome.runtime.MessageSender,
     sendResponse: (response: ExtensionResponse) => void,
   ): boolean => {
+    if (sender.id !== chrome.runtime.id) {
+      sendResponse({ type: 'ERROR', message: 'Rejected a message from outside this extension.' })
+      return false
+    }
     void handleMessage(message)
       .then((response) => sendResponse(response))
       .catch((error: unknown) => {
@@ -44,12 +52,20 @@ async function handleMessage(message: ExtensionMessage): Promise<ExtensionRespon
       return { type: 'PONG', version: chrome.runtime.getManifest().version }
 
     case 'RECEIVE_OFFER': {
-      const offerUri = message.offerUri
-      if (typeof offerUri === 'string' && offerUri.startsWith('openid-credential-offer:')) {
-        await receiveOfferInExtension(offerUri)
+      if (isCredentialOfferUri(message.offerUri)) {
+        await receiveOfferInExtension(message.offerUri, message.expiresAt)
       }
       return { type: 'OFFER_ACKNOWLEDGED' }
     }
+
+    case 'PRESENT_REQUEST': {
+      if (isPresentationRequestUri(message.requestUri)) await presentRequestInExtension(message.requestUri)
+      return { type: 'OFFER_ACKNOWLEDGED' }
+    }
+
+    case 'OPEN_WALLET':
+      await openWalletPage()
+      return { type: 'OFFER_ACKNOWLEDGED' }
 
     case 'WALLET_TASK_DONE': {
       if (await chrome.offscreen.hasDocument()) await chrome.offscreen.closeDocument()
@@ -78,17 +94,34 @@ chrome.storage.onChanged.addListener((changes, area) => {
   void applyBadge(Number(changes[CREDENTIAL_COUNT_KEY].newValue ?? 0))
 })
 
-async function receiveOfferInExtension(offerUri: string): Promise<void> {
-  if (await chrome.offscreen.hasDocument()) await chrome.offscreen.closeDocument()
+async function receiveOfferInExtension(offerUri: string, expiresAt?: string): Promise<void> {
   await chrome.storage.local.set({
-    [PENDING_OFFER_KEY]: offerUri,
-    [RECEIVE_STATUS_KEY]: { state: 'working', message: 'Opening the wallet… Keep this popup open.' },
+    [PENDING_OFFER_KEY]: expiresAt ? { offerUri, expiresAt } : { offerUri },
+    [RECEIVE_STATUS_KEY]: { state: 'working', message: 'Opening the wallet so you can review this offer…' },
   })
+  await openWalletPage()
+}
+
+async function presentRequestInExtension(requestUri: string): Promise<void> {
+  await chrome.storage.local.set({ [PENDING_REQUEST_KEY]: requestUri })
+  await openWalletPage()
+}
+
+async function openWalletPage(): Promise<void> {
+  const url = new URL(walletPageUrl())
+  url.searchParams.set('opened', String(Date.now()))
+  const target = url.toString()
   try {
-    await chrome.action.openPopup()
+    const [existing] = await chrome.tabs.query({ url: `${chrome.runtime.getURL('wallet.html')}*` })
+    if (existing?.id !== undefined) {
+      await chrome.tabs.update(existing.id, { url: target, active: true })
+      if (existing.windowId !== undefined) await chrome.windows.update(existing.windowId, { focused: true })
+      return
+    }
   } catch {
-    // Chrome only allows this from some user gestures. Clicking the toolbar icon opens the same popup.
+    // Without the tabs permission this query can fail. A new window still opens the wallet page.
   }
+  await chrome.windows.create({ url: target, type: 'popup', width: 480, height: 720, focused: true })
 }
 
 async function updateBadge(): Promise<void> {

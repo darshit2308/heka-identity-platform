@@ -2,6 +2,7 @@ import { Controller, HttpCode, HttpStatus, Post, UseGuards, Version } from '@nes
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 
 import { AuthInfo, JwtAuthGuard, ReqAuthInfo } from 'common/auth'
+import { AnyRole, RoleGuard } from 'common/authz'
 
 import { ContributorCredentialService } from './contributor-credential.service'
 import { ContributorCredentialOfferResponseDto } from './dto/contributor-credential-offer.dto'
@@ -13,7 +14,9 @@ import { ContributorCredentialOfferResponseDto } from './dto/contributor-credent
  */
 @ApiTags('Contributor Credential')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RoleGuard)
+/** Any authenticated Heka role. Issuance still requires that caller's own verified binding. */
+@AnyRole()
 @Controller('contributor-credential')
 export class ContributorCredentialController {
   public constructor(private readonly contributorCredentialService: ContributorCredentialService) {}
@@ -45,7 +48,7 @@ export class ContributorCredentialController {
     description: 'No verified contributor binding found for this user and wallet.',
   })
   public async createOffer(@ReqAuthInfo() authInfo: AuthInfo): Promise<ContributorCredentialOfferResponseDto> {
-    const credentialOffer = await this.contributorCredentialService.issueContributorCredential(authInfo)
-    return new ContributorCredentialOfferResponseDto(credentialOffer)
+    const offer = await this.contributorCredentialService.issueContributorCredential(authInfo)
+    return new ContributorCredentialOfferResponseDto(offer.credentialOffer, offer.txCode, offer.expiresAt)
   }
 }

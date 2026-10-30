@@ -64,7 +64,6 @@ interface CreateChallengeInput {
 @Injectable()
 export class GpgChallengeService {
   private readonly logger = new Logger(GpgChallengeService.name)
-  private readonly githubAccountIds = new Map<string, { id: string | null; expiresAt: number }>()
 
   public constructor(
     private readonly em: EntityManager,
@@ -122,6 +121,7 @@ export class GpgChallengeService {
   /**
    * Burns the nonce before any network or crypto work, then checks the
    * cleartext signature against the public key published at github.com/<user>.gpg.
+   * The stored login is resolved first and must still be the linked numeric account.
    * A challenge that belongs to another user is reported as not found.
    */
   public async verifySignature(
@@ -154,6 +154,19 @@ export class GpgChallengeService {
     }
     await this.em.refresh(challenge)
     this.logger.log(`Challenge ${challengeId} consumed for @${challenge.githubUsername}`)
+
+    const currentAccountId = await this.resolveGithubAccountId(challenge.githubUsername)
+    if (currentAccountId !== challenge.githubAccountId) {
+      this.logger.warn(
+        `GitHub login @${challenge.githubUsername} resolved to ${currentAccountId ?? 'nothing'}, not ${challenge.githubAccountId}`,
+      )
+      await this.recordRejectedProof(challenge, challengeId, 'GitHub login no longer matches the linked account')
+      return {
+        verified: false,
+        message:
+          'This GitHub login no longer belongs to the linked account. Link GitHub again, then request a new challenge.',
+      }
+    }
 
     const publicKeyArmored = await this.fetchGithubGpgKey(challenge.githubUsername)
     let verification: { isValid: false } | { isValid: true; gpgFingerprint: string }
@@ -236,15 +249,13 @@ export class GpgChallengeService {
     return `${apiRoot}/users/${encodeURIComponent(githubUsername)}`
   }
 
+  /**
+   * Always asks GitHub. A cached username-to-account mapping would let a renamed
+   * or reused login pass proof verification and status checks during the cache window.
+   */
   private async resolveGithubAccountId(githubUsername: string): Promise<string | null> {
     if (!GITHUB_USERNAME_PATTERN.test(githubUsername)) {
       return null
-    }
-
-    const cacheKey = githubUsername.toLowerCase()
-    const cached = this.githubAccountIds.get(cacheKey)
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.id
     }
 
     let account: { id?: number | string }
@@ -262,9 +273,7 @@ export class GpgChallengeService {
     } catch (error: unknown) {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status
-        if (status === 404) {
-          return this.rememberGithubAccountId(cacheKey, null)
-        }
+        if (status === 404) return null
         if (status === 403 || status === 429) {
           throw new HttpException(
             'GitHub API rate limit reached. Please wait a few minutes before retrying.',
@@ -276,21 +285,8 @@ export class GpgChallengeService {
       throw error
     }
 
-    if (account?.id === undefined || account.id === null || String(account.id).length === 0) {
-      return this.rememberGithubAccountId(cacheKey, null)
-    }
-    return this.rememberGithubAccountId(cacheKey, String(account.id))
-  }
-
-  private rememberGithubAccountId(cacheKey: string, id: string | null): string | null {
-    const now = Date.now()
-    if (this.githubAccountIds.size > 1_000) {
-      for (const [key, entry] of this.githubAccountIds) {
-        if (entry.expiresAt <= now) this.githubAccountIds.delete(key)
-      }
-    }
-    this.githubAccountIds.set(cacheKey, { id, expiresAt: now + (id ? 10 * 60_000 : 60_000) })
-    return id
+    if (account?.id === undefined || account.id === null || String(account.id).length === 0) return null
+    return String(account.id)
   }
 
   private async recordRejectedProof(challenge: GpgChallenge, challengeId: string, reason: string): Promise<void> {

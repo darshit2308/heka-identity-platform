@@ -1,59 +1,47 @@
 /**
  * heka-bridge.ts
  *
- * Content script injected into Heka verification pages.
+ * Content script injected into trusted Heka pages only.
  *
- * Purpose: Acts as a secure bridge between the Heka web page (untrusted)
- * and the extension (trusted). The web page cannot call
- * chrome.runtime.sendMessage directly — only content scripts can.
+ *   Heka page  --window.postMessage-->  content script  --chrome.runtime.sendMessage-->  service worker
  *
- * Message flow:
- *   Heka page  --window.postMessage-->  content script  --chrome.runtime.sendMessage-->  SW
- *   SW  --chrome.runtime.sendMessage-->  content script  --window.postMessage-->  Heka page
- *
- * Security: Only messages with the correct `source` tag are forwarded to
- * prevent arbitrary web pages from triggering wallet actions.
+ * The page cannot decide that an offer is accepted. This script only forwards a
+ * well-shaped message, and the wallet page asks the holder before redeeming it.
  */
 
+import { readBridgeMessage } from './bridge-message'
+import { isTrustedHekaOrigin } from './trusted-origins'
 import { RECEIVE_STATUS_KEY } from '../wallet/storage-keys'
 
-const HEKA_MESSAGE_SOURCE = 'heka-web-wallet-bridge'
 const EXTENSION_MESSAGE_SOURCE = 'heka-extension-bridge'
 
-// ── Page → Extension ──────────────────────────────────────────────────────────
-
 function replyToPage(type: string, payload: unknown): void {
+  if (!isTrustedHekaOrigin(window.location.origin)) return
   window.postMessage({ source: EXTENSION_MESSAGE_SOURCE, type, payload }, window.location.origin)
 }
 
 window.addEventListener('message', (event: MessageEvent) => {
-  // The page and this content script do not share a Window object, so event.source
-  // is not this script's window. Accept only this page's own messages.
-  if (event.origin !== window.location.origin || event.data?.source !== HEKA_MESSAGE_SOURCE) {
-    return
-  }
-
-  const { type, payload } = event.data as { type: string; payload: unknown; source: string }
+  const command = readBridgeMessage(event.data, event.origin, window.location.origin)
+  if (!command) return
 
   // Answer the install check here. Waiting for the service worker makes the page
   // time out while that worker is still starting.
-  if (type === 'PING') {
+  if (command.type === 'PING') {
     replyToPage('PING_RESPONSE', { type: 'PONG', version: '0.1.0' })
     return
   }
 
-  if (type === 'RECEIVE_OFFER' || type === 'GET_STATUS') {
-    chrome.runtime.sendMessage({ type, ...((payload as object | null) ?? {}) }, (response) => {
-      replyToPage(`${type}_RESPONSE`, response)
-    })
-  }
+  chrome.runtime.sendMessage(command, (response) => {
+    replyToPage(`${command.type}_RESPONSE`, response)
+  })
 })
 
-// Signal to the Heka page that the extension is installed and ready
-window.postMessage(
-  { source: EXTENSION_MESSAGE_SOURCE, type: 'EXTENSION_READY', payload: { version: '0.1.0' } },
-  '*',
-)
+if (isTrustedHekaOrigin(window.location.origin)) {
+  window.postMessage(
+    { source: EXTENSION_MESSAGE_SOURCE, type: 'EXTENSION_READY', payload: { version: '0.1.0' } },
+    window.location.origin,
+  )
+}
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return

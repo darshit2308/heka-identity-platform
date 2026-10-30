@@ -7,9 +7,9 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common'
-import { AxiosError, AxiosHeaders } from 'axios'
+import { AxiosError, AxiosHeaders, type AxiosResponse } from 'axios'
 import * as openpgp from 'openpgp'
-import { of, throwError } from 'rxjs'
+import { Observable, of, throwError } from 'rxjs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AuthInfo, Role } from 'common/auth'
@@ -62,6 +62,31 @@ function axiosNetworkError(): AxiosError {
   const err = new AxiosError('Network Error')
   err.code = 'ECONNREFUSED'
   return err
+}
+
+function axiosResponse<T>(data: T, status = 200): AxiosResponse<T> {
+  return {
+    data,
+    status,
+    statusText: status === 200 ? 'OK' : String(status),
+    headers: new AxiosHeaders(),
+    config: { headers: new AxiosHeaders() },
+  }
+}
+
+function httpOk<T>(data: T): Observable<AxiosResponse<T>> {
+  return of(axiosResponse(data))
+}
+
+function httpFail(error: AxiosError): Observable<AxiosResponse<never>> {
+  return throwError(() => error)
+}
+
+function mockLinkedAccountThen(httpGet: ReturnType<typeof vi.fn>, gpg: Observable<AxiosResponse<unknown>>) {
+  httpGet.mockImplementation((url: string): Observable<AxiosResponse<unknown>> => {
+    if (String(url).includes('/users/')) return httpOk({ id: 4115704, login: 'test-contributor' })
+    return gpg
+  })
 }
 
 describe('GpgChallengeService', () => {
@@ -182,13 +207,14 @@ describe('GpgChallengeService', () => {
     it('burns the challenge before calling GitHub', async () => {
       const challenge = buildChallenge()
       em.findOne.mockResolvedValue(challenge)
-      httpService.get.mockImplementation(() => {
+      httpService.get.mockImplementation((url: string) => {
         expect(em.nativeUpdate).toHaveBeenCalledWith(
           GpgChallenge,
           { id: challenge.id, consumed: false },
           { consumed: true },
         )
-        return throwError(() => axiosErrorWithStatus(404))
+        if (String(url).includes('/users/')) return httpOk({ id: 4115704, login: 'test-contributor' })
+        return httpFail(axiosErrorWithStatus(404))
       })
 
       await expect(service.verifySignature(auth(), challenge.id, 'sig')).rejects.toThrow(BadRequestException)
@@ -208,13 +234,13 @@ describe('GpgChallengeService', () => {
     })
 
     it('reports a missing GitHub key', async () => {
-      httpService.get.mockReturnValue(throwError(() => axiosErrorWithStatus(404)))
+      mockLinkedAccountThen(httpService.get, httpFail(axiosErrorWithStatus(404)))
       await expect(service.verifySignature(auth(), 'id', 'sig')).rejects.toThrow(/No public GPG key/)
     })
 
     it('maps GitHub 429 and 403 to 429', async () => {
       for (const status of [429, 403]) {
-        httpService.get.mockReturnValue(throwError(() => axiosErrorWithStatus(status)))
+        httpService.get.mockReturnValue(httpFail(axiosErrorWithStatus(status)))
         try {
           await service.verifySignature(auth(), 'id', 'sig')
           expect.fail('expected a rate-limit error')
@@ -226,13 +252,47 @@ describe('GpgChallengeService', () => {
     })
 
     it('maps network failures to ServiceUnavailableException', async () => {
-      httpService.get.mockReturnValue(throwError(() => axiosNetworkError()))
+      httpService.get.mockReturnValue(httpFail(axiosNetworkError()))
       await expect(service.verifySignature(auth(), 'id', 'sig')).rejects.toThrow(ServiceUnavailableException)
     })
 
     it('rejects an empty key body', async () => {
-      httpService.get.mockReturnValue(of({ data: '   ' }))
+      mockLinkedAccountThen(httpService.get, httpOk('   '))
       await expect(service.verifySignature(auth(), 'id', 'sig')).rejects.toThrow(/empty/)
+    })
+
+    it('does not fetch a GPG key when the login now belongs to another account', async () => {
+      em.findOne.mockResolvedValue(buildChallenge())
+      httpService.get.mockImplementation((url: string) => {
+        if (String(url).includes('/users/')) return httpOk({ id: 999, login: 'test-contributor' })
+        return httpOk('should-not-fetch')
+      })
+
+      const result = await service.verifySignature(auth(), 'id', 'sig')
+
+      expect(result).toMatchObject({
+        verified: false,
+        message: expect.stringMatching(/Link GitHub again/),
+      })
+      expect(httpService.get).toHaveBeenCalledTimes(1)
+      expect(String(httpService.get.mock.calls[0][0])).toContain('/users/test-contributor')
+      expect(onboarding.recordProofRejected).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'GitHub login no longer matches the linked account' }),
+      )
+    })
+
+    it('does not fetch a GPG key when the stored login no longer exists', async () => {
+      em.findOne.mockResolvedValue(buildChallenge())
+      httpService.get.mockReturnValue(httpFail(axiosErrorWithStatus(404)))
+
+      const result = await service.verifySignature(auth(), 'id', 'sig')
+
+      expect(result.verified).toBe(false)
+      expect(httpService.get).toHaveBeenCalledTimes(1)
+      expect(String(httpService.get.mock.calls[0][0])).not.toContain('.gpg')
+      expect(onboarding.recordProofRejected).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'GitHub login no longer matches the linked account' }),
+      )
     })
   })
 
@@ -244,7 +304,7 @@ describe('GpgChallengeService', () => {
         curve: 'curve25519Legacy',
         userIDs: [{ name: 'Test Key', email: 'test@example.com' }],
       })
-      httpService.get.mockReturnValue(of({ data: keyPair.publicKey }))
+      mockLinkedAccountThen(httpService.get, httpOk(keyPair.publicKey))
 
       await expect(service.verifySignature(auth(), 'id', 'this is not a pgp message')).rejects.toThrow(
         /could not be parsed as a PGP cleartext-signed message/,
@@ -276,7 +336,7 @@ describe('GpgChallengeService', () => {
       const publicKey = await openpgp.readKey({ armoredKey: signingKey.publicKey })
       const expectedFingerprint = publicKey.getKeys(signingKeyId)[0].getFingerprint().toUpperCase()
 
-      httpService.get.mockReturnValue(of({ data: `${otherKey.publicKey}\n${signingKey.publicKey}` }))
+      mockLinkedAccountThen(httpService.get, httpOk(`${otherKey.publicKey}\n${signingKey.publicKey}`))
 
       const result = await service.verifySignature(auth(), challenge.id, armoredMessage)
 
@@ -299,7 +359,7 @@ describe('GpgChallengeService', () => {
       const privateKey = await openpgp.readPrivateKey({ armoredKey: signingKey.privateKey })
       const cleartext = await openpgp.createCleartextMessage({ text: challenge.nonce })
       const armoredMessage = await openpgp.sign({ message: cleartext, signingKeys: privateKey })
-      httpService.get.mockReturnValue(of({ data: signingKey.publicKey }))
+      mockLinkedAccountThen(httpService.get, httpOk(signingKey.publicKey))
 
       const result = await service.verifySignature(auth(), challenge.id, armoredMessage)
 
@@ -311,7 +371,7 @@ describe('GpgChallengeService', () => {
 
   describe('getContributorStatus', () => {
     it('returns unverified when GitHub has no such login', async () => {
-      httpService.get.mockReturnValue(throwError(() => axiosErrorWithStatus(404)))
+      httpService.get.mockReturnValue(httpFail(axiosErrorWithStatus(404)))
 
       await expect(service.getContributorStatus('test-contributor')).resolves.toEqual({
         isVerified: false,
@@ -321,7 +381,7 @@ describe('GpgChallengeService', () => {
     })
 
     it('returns unverified when the current account binding has no proof', async () => {
-      httpService.get.mockReturnValue(of({ data: { id: 4115704, login: 'test-contributor' } }))
+      httpService.get.mockReturnValue(httpOk({ id: 4115704, login: 'test-contributor' }))
       onboarding.findBindingByGithubAccountId.mockResolvedValue({
         githubAccountId: '4115704',
         githubUsername: 'old-name',
@@ -339,7 +399,7 @@ describe('GpgChallengeService', () => {
 
     it('reads verification from the account-id binding after a username change', async () => {
       const verifiedAt = new Date('2026-07-06T09:00:00Z')
-      httpService.get.mockReturnValue(of({ data: { id: 4115704, login: 'renamed' } }))
+      httpService.get.mockReturnValue(httpOk({ id: 4115704, login: 'renamed' }))
       onboarding.findBindingByGithubAccountId.mockResolvedValue({
         githubAccountId: '4115704',
         githubUsername: 'old-name',
@@ -359,14 +419,14 @@ describe('GpgChallengeService', () => {
       )
     })
 
-    it('reuses the cached GitHub account id', async () => {
-      httpService.get.mockReturnValue(of({ data: { id: 4115704, login: 'renamed' } }))
+    it('resolves the GitHub account id again on every status check', async () => {
+      httpService.get.mockReturnValue(httpOk({ id: 4115704, login: 'renamed' }))
       onboarding.findBindingByGithubAccountId.mockResolvedValue(null)
 
       await service.getContributorStatus('renamed')
       await service.getContributorStatus('renamed')
 
-      expect(httpService.get).toHaveBeenCalledOnce()
+      expect(httpService.get).toHaveBeenCalledTimes(2)
     })
   })
 })

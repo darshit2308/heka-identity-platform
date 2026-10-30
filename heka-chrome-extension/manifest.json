@@ -11,8 +11,11 @@
     "offscreen"
   ],
   "host_permissions": [
-    "https://*/*",
-    "http://localhost/*"
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*"
   ],
 
   "background": {
@@ -33,9 +36,9 @@
   "content_scripts": [
     {
       "matches": [
-        "http://localhost/*",
-        "https://heka.hiero.org/*",
-        "https://*.hiero.org/*"
+        "http://localhost:8000/*",
+        "http://127.0.0.1:8000/*",
+        "https://heka.hiero.org/*"
       ],
       "js":  ["content-scripts/heka-bridge.js"],
       "run_at": "document_idle"

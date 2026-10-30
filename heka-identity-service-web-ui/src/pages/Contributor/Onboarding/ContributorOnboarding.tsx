@@ -1,5 +1,5 @@
 // ContributorOnboarding.tsx
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 
@@ -41,6 +41,8 @@ const ContributorOnboarding: React.FC = () => {
   const isLoading        = useSelector(getContributorIsLoading);
   const error            = useSelector(getContributorError);
   const githubUsername   = useSelector(getContributorGithubUsername);
+  const [walletTxCode, setWalletTxCode] = useState<string | null>(null);
+  const [walletOfferExpiresAt, setWalletOfferExpiresAt] = useState<string | null>(null);
 
   // Load the current onboarding status on mount so we can fast-forward
   // the wizard if the user has already completed some steps.
@@ -77,19 +79,31 @@ const ContributorOnboarding: React.FC = () => {
   }, [dispatch]);
 
   const handleRequestCredential = useCallback(async () => {
-    const response = await $agencyApi.post<{ credentialOffer: string }>(
+    const response = await $agencyApi.post<{ credentialOffer: string; txCode: string; expiresAt: string }>(
       agencyEndpoints.contributorCredentialOffer,
     );
+    const { credentialOffer, txCode, expiresAt } = response.data;
+    if (!credentialOffer.startsWith('openid-credential-offer:') || !txCode || !expiresAt) {
+      throw new Error('The issuer did not return a transaction code and expiry for this offer.');
+    }
 
+    setWalletTxCode(txCode);
+    setWalletOfferExpiresAt(expiresAt);
     window.postMessage(
       {
         source: 'heka-web-wallet-bridge',
         type: 'RECEIVE_OFFER',
-        payload: { offerUri: response.data.credentialOffer },
+        payload: { offerUri: credentialOffer, expiresAt },
       },
-      '*',
+      window.location.origin,
     );
   }, []);
+
+  useEffect(() => {
+    if (currentStep === 2 && !activeChallenge) {
+      dispatch(contributorSlice.actions.setCurrentStep(1));
+    }
+  }, [activeChallenge, currentStep, dispatch]);
 
   const renderStep = () => {
     switch (currentStep) {
@@ -105,11 +119,7 @@ const ContributorOnboarding: React.FC = () => {
         );
 
       case 2:
-        if (!activeChallenge) {
-          // Guard: shouldn't happen but fall back to challenge step
-          dispatch(contributorSlice.actions.setCurrentStep(1));
-          return null;
-        }
+        if (!activeChallenge) return null;
         return (
           <SignStep
             challenge={activeChallenge}
@@ -125,6 +135,8 @@ const ContributorOnboarding: React.FC = () => {
             credentialIssued={credentialIssued}
             onRequestCredential={handleRequestCredential}
             onCredentialStored={handleCredentialStored}
+            txCode={walletTxCode}
+            offerExpiresAt={walletOfferExpiresAt}
           />
         );
 

@@ -13,6 +13,7 @@ import {
 } from '@nestjs/swagger'
 
 import { AuthInfo, JwtAuthGuard, ReqAuthInfo } from 'common/auth'
+import { AnyRole, RoleGuard } from 'common/authz'
 
 import { GetStatusParamsDto, VerifySignatureDto } from './dto'
 import { GithubAppStatusGuard } from './github-app-status.guard'
@@ -28,7 +29,8 @@ export class GpgChallengeController {
   @HttpCode(HttpStatus.CREATED)
   @ApiBearerAuth()
   @ApiUnauthorizedResponse({ description: 'Unauthorized.' })
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RoleGuard)
+  @AnyRole()
   @ApiOperation({
     summary: 'Request a GPG ownership challenge for the linked GitHub account',
     description:
@@ -57,7 +59,8 @@ export class GpgChallengeController {
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiUnauthorizedResponse({ description: 'Unauthorized.' })
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RoleGuard)
+  @AnyRole()
   @ApiOperation({
     summary: 'Submit a GPG signature for verification',
     description:
@@ -106,7 +109,7 @@ export class GpgChallengeController {
   @ApiOperation({
     summary: 'Get GPG verification status for a GitHub login',
     description:
-      'Used by the Heka GitHub App. Requires the shared status token. Resolves the login to the current numeric GitHub account id, caches that lookup, and reads that binding. Always returns HTTP 200 for an unknown login; read `isVerified`.',
+      'Used by the Heka GitHub App. Requires the shared status token. Resolves the login to the current numeric GitHub account id on every request, without a cache, and reads that binding. Always returns HTTP 200 for an unknown login; read `isVerified`.',
   })
   @ApiParam({ name: 'githubUsername', example: 'octocat' })
   @ApiOkResponse({ description: 'Status retrieved.' })

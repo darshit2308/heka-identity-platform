@@ -9,6 +9,8 @@ interface Props {
   credentialIssued: boolean;
   onRequestCredential: () => Promise<void>;
   onCredentialStored: () => void;
+  txCode: string | null;
+  offerExpiresAt: string | null;
 }
 
 type WalletStatus = 'idle' | 'sending' | 'sent' | 'received' | 'error' | 'not_installed';
@@ -18,6 +20,8 @@ const VerifyStep: React.FC<Props> = ({
   credentialIssued,
   onRequestCredential,
   onCredentialStored,
+  txCode,
+  offerExpiresAt,
 }) => {
   const [walletStatus, setWalletStatus] = useState<WalletStatus>('idle');
   const [receiveError, setReceiveError] = useState<string | null>(null);
@@ -57,14 +61,14 @@ const VerifyStep: React.FC<Props> = ({
           resolve(true);
         }
       };
-      
+
       const timeout = setTimeout(() => {
         window.removeEventListener('message', handleMessage);
         resolve(false);
       }, 1500);
 
       window.addEventListener('message', handleMessage);
-      window.postMessage({ source: HEKA_SOURCE, type: 'PING' }, '*');
+      window.postMessage({ source: HEKA_SOURCE, type: 'PING' }, window.location.origin);
     });
 
     if (!pingResult) {
@@ -151,7 +155,15 @@ const VerifyStep: React.FC<Props> = ({
         {walletStatus === 'sent' && !stored && (
           <div className={cls.successBox}>
             <span>✅</span>
-            <p>Offer sent to your Heka Web Wallet. Keep the extension popup open until the credential is stored.</p>
+            <div>
+              <p>
+                The wallet is open. Review the issuer, then enter this code. It is not part of the offer.
+              </p>
+              {txCode && <p className={cls.txCode}>{txCode}</p>}
+              {offerExpiresAt && (
+                <p>This code expires {new Date(offerExpiresAt).toLocaleString()}. Request a new one after that.</p>
+              )}
+            </div>
           </div>
         )}
 

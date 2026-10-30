@@ -33,5 +33,21 @@ export const CONTRIBUTOR_CREDENTIAL_VCT = 'https://hiero.ledger.org/vct/GithubCo
  */
 export const CONTRIBUTOR_CREDENTIAL_SELECTIVE_CLAIMS = ['githubUsername', 'gpgFingerprint'] as const
 
+/**
+ * How long a GithubContributorCredential stays valid.
+ * This prototype does not publish a status list, so `exp` is the freshness bound
+ * after a GitHub unlink, a GPG key change, or a policy change.
+ */
+export const CONTRIBUTOR_CREDENTIAL_LIFETIME_SECONDS = 90 * 24 * 60 * 60
+
+/** Digits the holder must enter before the pre-authorized offer can be redeemed. */
+export const CONTRIBUTOR_CREDENTIAL_TX_CODE_LENGTH = 8
+
+/**
+ * How long a credential offer can be redeemed. Credo's default is 180 seconds,
+ * which expires while the holder is still reading the transaction code.
+ */
+export const CONTRIBUTOR_CREDENTIAL_OFFER_TTL_SECONDS = 10 * 60
+
 /** Human-readable display label shown in wallets and verifier UIs. */
 export const CONTRIBUTOR_CREDENTIAL_DISPLAY_NAME = 'GitHub Contributor Credential' as const

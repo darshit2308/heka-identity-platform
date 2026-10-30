@@ -32,6 +32,9 @@ export interface ContributorCredentialPayload {
   /** Verifiable Credential Type (required by SD-JWT VC format) */
   vct: string
 
+  /** Unix expiry. Credo sets `iat` when it signs; this value is the freshness bound. */
+  exp: number
+
   /** Allows any other claims, required for compatibility with SdJwtVcPayload */
   [key: string]: unknown
 }

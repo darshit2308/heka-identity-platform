@@ -35,6 +35,40 @@ const stripExtensionUnsafeEval = () => ({
   },
 })
 
+/**
+ * cbor-x's default build and Ajv (via Presentation Exchange) call Function().
+ * Manifest V3 rejects that at runtime. The holder path uses DCQL, so the
+ * Presentation Exchange modules are replaced with stubs, and CBOR uses the
+ * package's no-eval build.
+ */
+const cspSafeCredoModules = () => ({
+  name: 'csp-safe-credo-modules',
+  enforce: 'pre' as const,
+  resolveId(source: string, importer?: string) {
+    if (source === 'cbor-x') return resolve(__dirname, 'src/credo/cbor-no-eval.js')
+    if (source === 'setimmediate') return resolve(__dirname, 'src/credo/setimmediate-csp.js')
+
+    const fromPresentationExchange =
+      source.includes('dif-presentation-exchange/') ||
+      (importer?.includes('/dif-presentation-exchange/') ?? false)
+    if (!fromPresentationExchange) return null
+
+    if (source === './DifPresentationExchangeService.mjs' || source.endsWith('/DifPresentationExchangeService.mjs')) {
+      return resolve(__dirname, 'src/credo/dif-pex-service-stub.ts')
+    }
+    if (source === './models/index.mjs' || source.endsWith('dif-presentation-exchange/models/index.mjs')) {
+      return resolve(__dirname, 'src/credo/pex-location-stub.ts')
+    }
+    if (source.endsWith('credentialSelection.mjs')) {
+      return resolve(__dirname, 'src/credo/credential-selection-stub.ts')
+    }
+    if (source.endsWith('presentationSelection.mjs')) {
+      return resolve(__dirname, 'src/credo/presentation-selection-stub.ts')
+    }
+    return null
+  },
+})
+
 /** Inline Rollup plugin that copies static assets into dist after the build. */
 const copyExtensionAssets = () => ({
   name: 'copy-extension-assets',
@@ -66,12 +100,12 @@ const copyExtensionAssets = () => ({
   },
 });
 
-export default defineConfig({
-  plugins: [react(), stripExtensionUnsafeEval(), copyExtensionAssets()],
+export default defineConfig(({ mode }) => ({
+  plugins: [react(), cspSafeCredoModules(), stripExtensionUnsafeEval(), copyExtensionAssets()],
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    sourcemap: true,
+    sourcemap: mode !== 'production',
     rollupOptions: {
       input: {
         // popup.html is at project root so Vite processes it correctly
@@ -124,4 +158,4 @@ export default defineConfig({
       '@hiero-did-sdk/crypto': resolve(__dirname, 'src/credo/browser-hedera-crypto.ts'),
     },
   },
-});
+}));

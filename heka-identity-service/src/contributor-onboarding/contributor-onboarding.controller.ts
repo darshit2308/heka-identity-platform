@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards, Version }
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger'
 
 import { AuthInfo, JwtAuthGuard, ReqAuthInfo } from 'common/auth'
+import { AnyRole, RoleGuard } from 'common/authz'
 
 import { ContributorOnboardingService } from './contributor-onboarding.service'
 import { ContributorOnboardingStatus } from './contributor-onboarding.types'
@@ -10,7 +11,9 @@ import { GithubLinkCallbackDto } from './dto/github-link-callback.dto'
 @ApiTags('Contributor Onboarding')
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({ description: 'Unauthorized.' })
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RoleGuard)
+/** Any authenticated Heka role. The service still scopes every read and write to the caller. */
+@AnyRole()
 @Controller('contributor-onboarding')
 export class ContributorOnboardingController {
   public constructor(private readonly contributorOnboardingService: ContributorOnboardingService) {}

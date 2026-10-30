@@ -3,8 +3,7 @@ import { WalletStatus } from './components/WalletStatus'
 import { CredentialList } from './components/CredentialList'
 import { ReceiveCredential } from './components/ReceiveCredential'
 import { loadCredentialSummaries } from '../wallet/summary-cache'
-import { CREDENTIALS_SUMMARY_KEY, PENDING_OFFER_KEY, RECEIVE_STATUS_KEY } from '../wallet/storage-keys'
-import { ensurePendingReceive } from './receive-pending'
+import { CREDENTIALS_SUMMARY_KEY, RECEIVE_STATUS_KEY } from '../wallet/storage-keys'
 import type { CredentialSummary } from '../wallet/summary-cache'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -58,7 +57,6 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     void loadWalletState()
-    ensurePendingReceive()
     chrome.storage.local.get(RECEIVE_STATUS_KEY, (data) => {
       const status = data[RECEIVE_STATUS_KEY] as { state?: string; message?: string } | undefined
       if (status?.message) setReceiveMessage(status.message)
@@ -67,14 +65,13 @@ export const App: React.FC = () => {
     const onChanged: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
       if (area !== 'local') return
       if (changes[CREDENTIALS_SUMMARY_KEY]) void loadWalletState()
-      if (typeof changes[PENDING_OFFER_KEY]?.newValue === 'string') ensurePendingReceive()
       const next = changes[RECEIVE_STATUS_KEY]?.newValue as { state?: string; message?: string } | undefined
       if (next?.message) setReceiveMessage(next.message)
       if (next?.state) setReceiveFailed(next.state === 'error')
     }
     chrome.storage.onChanged.addListener(onChanged)
     return () => chrome.storage.onChanged.removeListener(onChanged)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div style={s.container}>
@@ -109,8 +106,8 @@ export const App: React.FC = () => {
       <main style={s.main}>
         {receiveMessage && <p style={s.receiveNote}>{receiveMessage}</p>}
         {receiveFailed && (
-          <button type="button" style={s.retryBtn} onClick={() => ensurePendingReceive()}>
-            Retry receive
+          <button type="button" style={s.retryBtn} onClick={() => void chrome.runtime.sendMessage({ type: 'OPEN_WALLET' })}>
+            Open wallet
           </button>
         )}
         {wallet.loading ? (
@@ -166,7 +163,7 @@ const s: Record<string, React.CSSProperties> = {
   container: {
     display: 'flex', flexDirection: 'column', minHeight: '100vh',
     background: DARK, position: 'relative', overflow: 'hidden',
-    fontFamily: "'Inter','Segoe UI',system-ui,sans-serif",
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
   },
   blob1: {
     position: 'absolute', top: -60, left: -60, width: 260, height: 200,
@@ -248,10 +245,8 @@ const s: Record<string, React.CSSProperties> = {
   },
 }
 
-// Inject global styles + font
 const styleTag = document.createElement('style')
 styleTag.textContent = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes heka-fade-in { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

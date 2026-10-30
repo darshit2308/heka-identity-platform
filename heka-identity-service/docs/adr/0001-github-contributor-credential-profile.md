@@ -1,7 +1,9 @@
 # ADR-0001: GithubContributorCredential Profile
 
-**Status:** Accepted  
-**Date:** 2026-06-28  
+**Status:** Accepted
+
+**Date:** 2026-06-28
+
 **Branch:** `feat/github-credential-schema`
 
 ---
@@ -49,7 +51,7 @@ The `GithubContributorCredential` uses the following disclosure model:
 |-------|------|--------|
 | `iss` | String | Issuer DID — verifiers must always know who issued the credential |
 | `iat` | Integer | Issuance timestamp (Unix timestamp) — required for freshness checks |
-| `exp` | Integer | Expiry timestamp (Unix timestamp) — required for freshness checks |
+| `exp` | Integer | Expiry timestamp (Unix timestamp), 90 days after issuance. This prototype has no status-list revocation, so `exp` is the freshness bound |
 | `vct` | String | Credential type identifier (`https://hiero.ledger.org/vct/GithubContributorCredential`) |
 | `githubAccountId` | String | Immutable GitHub numeric account ID (represented as string to prevent 64-bit integer overflow across JSON runtimes) — identity anchor |
 | `verifiedAt` | String | ISO-8601 UTC timestamp of the completed GPG verification |

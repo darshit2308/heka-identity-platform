@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import type { Agent } from '@credo-ts/core'
 
 import { browserAgentDependencies } from './browser-dependencies'
@@ -21,9 +22,9 @@ export async function getOrCreateAgent(): Promise<Agent> {
 
     const agent = new Agent({
       config: {
-        // The local issuer advertises http://localhost:3003. A production Vite
-        // build would otherwise reject that credential_issuer URL.
-        allowInsecureHttpUrls: true,
+        // Production builds require HTTPS issuer and verifier URLs.
+        // `yarn dev` is a development-mode build, so localhost HTTP still works there.
+        allowInsecureHttpUrls: import.meta.env.DEV,
         // A fresh IndexedDB has no storage version. Credo refuses to start
         // until that record is brought forward to the current framework version.
         autoUpdateStorageOnStartup: true,

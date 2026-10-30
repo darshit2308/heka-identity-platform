@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
 import { createMock } from '@golevelup/ts-vitest'
 import { EntityManager } from '@mikro-orm/core'
-import { ConflictException, NotFoundException } from '@nestjs/common'
+import { ConflictException, InternalServerErrorException, NotFoundException } from '@nestjs/common'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AuthInfo, Role } from 'common/auth'
@@ -10,8 +10,11 @@ import { ContributorOnboardingService, type VerifiedContributor } from 'contribu
 import { OpenId4VcIssuerService } from 'openid4vc/issuer/issuer.service'
 
 import {
+  CONTRIBUTOR_CREDENTIAL_LIFETIME_SECONDS,
+  CONTRIBUTOR_CREDENTIAL_OFFER_TTL_SECONDS,
   CONTRIBUTOR_CREDENTIAL_SELECTIVE_CLAIMS,
   CONTRIBUTOR_CREDENTIAL_SUPPORTED_ID,
+  CONTRIBUTOR_CREDENTIAL_TX_CODE_LENGTH,
   CONTRIBUTOR_CREDENTIAL_VCT,
 } from '../contributor-credential.constants'
 import { ContributorCredentialService } from '../contributor-credential.service'
@@ -55,6 +58,7 @@ const mockAgentConfig = {
 const FAKE_ISSUER_DID = 'did:hedera:testnet:z6Mk'
 const FAKE_VERIFICATION_METHOD = `${FAKE_ISSUER_DID}#key-1`
 const FAKE_CREDENTIAL_OFFER_URI = 'openid-credential-offer://?credential_offer_uri=https://example.com/offer/abc'
+const FAKE_OFFER_EXPIRES_AT = new Date('2026-10-30T12:10:00.000Z')
 
 function buildFakeTenantAgent(
   overrides: Partial<{
@@ -83,7 +87,7 @@ function buildFakeTenantAgent(
       issuer: {
         createCredentialOffer: vi.fn().mockResolvedValue({
           credentialOffer: credentialOfferUri,
-          issuanceSession: { id: 'session-1' },
+          issuanceSession: { id: 'session-1', userPin: '12345678', expiresAt: FAKE_OFFER_EXPIRES_AT },
         }),
       },
     },
@@ -225,7 +229,9 @@ describe('ContributorCredentialService', () => {
     it('returns a credential offer URI for a verified contributor', async () => {
       const result = await service.issueContributorCredential(buildAuthInfo())
 
-      expect(result).toMatch(/^openid-credential-offer:\/\//)
+      expect(result.credentialOffer).toMatch(/^openid-credential-offer:\/\//)
+      expect(result.txCode).toBe('12345678')
+      expect(result.expiresAt).toBe(FAKE_OFFER_EXPIRES_AT.toISOString())
       expect(onboardingServiceMock.getVerifiedBindingByUser).toHaveBeenCalledWith('tenant-1', 'user-1', 'User_user-1')
     })
 
@@ -241,7 +247,8 @@ describe('ContributorCredentialService', () => {
       await service.issueContributorCredential(buildAuthInfo())
 
       // The fake tenant agent's createCredentialOffer was called — verify its args
-      const withTenantCb = vi.mocked(agentMock.modules.tenants.withTenantAgent).mock.calls[0][1]
+      const tenantCalls = vi.mocked(agentMock.modules.tenants.withTenantAgent).mock.calls
+      const withTenantCb = tenantCalls[tenantCalls.length - 1][1]
 
       // Build a spy tenant agent to intercept the call
       const spyTenantAgent = buildFakeTenantAgent()
@@ -258,12 +265,23 @@ describe('ContributorCredentialService', () => {
       expect(meta.payload.gpgFingerprint).toBe('AABBCCDDEEFF00112233445566778899AABBCCDD')
       expect(meta.payload.verifiedAt).toBe('2026-07-13T10:00:00.000Z')
       expect(meta.payload.walletId).toBe('User_user-1')
+      expect(meta.payload.exp).toBeGreaterThan(
+        Math.floor(Date.now() / 1000) + CONTRIBUTOR_CREDENTIAL_LIFETIME_SECONDS - 5,
+      )
+      expect(meta.payload.exp).toBeLessThan(Math.floor(Date.now() / 1000) + CONTRIBUTOR_CREDENTIAL_LIFETIME_SECONDS + 5)
+      expect(offerArgs.preAuthorizedCodeFlowConfig.txCode).toEqual({
+        input_mode: 'numeric',
+        length: CONTRIBUTOR_CREDENTIAL_TX_CODE_LENGTH,
+        description: 'Enter the code shown on the Heka contributor page.',
+      })
+      expect(offerArgs.expirationInSeconds).toBe(CONTRIBUTOR_CREDENTIAL_OFFER_TTL_SECONDS)
     })
 
     it('sets the correct disclosure frame matching the Week 2 policy', async () => {
       await service.issueContributorCredential(buildAuthInfo())
 
-      const withTenantCb = vi.mocked(agentMock.modules.tenants.withTenantAgent).mock.calls[0][1]
+      const tenantCalls = vi.mocked(agentMock.modules.tenants.withTenantAgent).mock.calls
+      const withTenantCb = tenantCalls[tenantCalls.length - 1][1]
       const spyTenantAgent = buildFakeTenantAgent()
       await withTenantCb(spyTenantAgent)
 
@@ -277,7 +295,8 @@ describe('ContributorCredentialService', () => {
     it('does not include non-selectively-disclosable claims in the disclosure frame', async () => {
       await service.issueContributorCredential(buildAuthInfo())
 
-      const withTenantCb = vi.mocked(agentMock.modules.tenants.withTenantAgent).mock.calls[0][1]
+      const tenantCalls = vi.mocked(agentMock.modules.tenants.withTenantAgent).mock.calls
+      const withTenantCb = tenantCalls[tenantCalls.length - 1][1]
       const spyTenantAgent = buildFakeTenantAgent()
       await withTenantCb(spyTenantAgent)
 
@@ -287,12 +306,14 @@ describe('ContributorCredentialService', () => {
       expect(_sd).not.toContain('githubAccountId')
       expect(_sd).not.toContain('verifiedAt')
       expect(_sd).not.toContain('walletId')
+      expect(_sd).not.toContain('exp')
     })
 
     it('uses assertionMethod from the DID document with typeof string check', async () => {
       await service.issueContributorCredential(buildAuthInfo())
 
-      const withTenantCb = vi.mocked(agentMock.modules.tenants.withTenantAgent).mock.calls[0][1]
+      const tenantCalls = vi.mocked(agentMock.modules.tenants.withTenantAgent).mock.calls
+      const withTenantCb = tenantCalls[tenantCalls.length - 1][1]
       const spyTenantAgent = buildFakeTenantAgent()
       await withTenantCb(spyTenantAgent)
 
@@ -400,6 +421,68 @@ describe('ContributorCredentialService', () => {
       vi.mocked(emForkMock.findOne).mockResolvedValueOnce(null)
 
       await expect(service.issueContributorCredential(buildAuthInfo())).rejects.toThrow(NotFoundException)
+    })
+
+    it('refuses an offer that has no expiry', async () => {
+      const spyTenantAgent = buildFakeTenantAgent()
+      vi.mocked(spyTenantAgent.openid4vc.issuer.createCredentialOffer).mockResolvedValue({
+        credentialOffer: FAKE_CREDENTIAL_OFFER_URI,
+        issuanceSession: { id: 'session-1', userPin: '12345678' },
+      })
+      agentMock.modules.tenants.withTenantAgent = vi
+        .fn()
+        .mockImplementation(async (_opts: unknown, cb: (tenantAgent: typeof spyTenantAgent) => Promise<void>) => {
+          await cb(spyTenantAgent)
+        })
+
+      await expect(service.issueContributorCredential(buildAuthInfo())).rejects.toThrow(InternalServerErrorException)
+    })
+
+    it('refuses an offer that has no transaction code', async () => {
+      const spyTenantAgent = buildFakeTenantAgent()
+      vi.mocked(spyTenantAgent.openid4vc.issuer.createCredentialOffer).mockResolvedValue({
+        credentialOffer: FAKE_CREDENTIAL_OFFER_URI,
+        issuanceSession: { id: 'session-1' },
+      })
+      agentMock.modules.tenants.withTenantAgent = vi
+        .fn()
+        .mockImplementation(async (_opts: unknown, cb: (tenantAgent: typeof spyTenantAgent) => Promise<void>) => {
+          await cb(spyTenantAgent)
+        })
+
+      await expect(service.issueContributorCredential(buildAuthInfo())).rejects.toThrow(InternalServerErrorException)
+    })
+
+    it('registers the issuer on the next offer after startup had no demo wallet', async () => {
+      vi.mocked(emForkMock.findOne).mockResolvedValueOnce(null)
+      await service.onApplicationBootstrap()
+      expect(issuerServiceMock.createIssuer).not.toHaveBeenCalled()
+
+      vi.mocked(emForkMock.findOne).mockResolvedValue({ id: 'User_demo', tenantId: 'tenant-abc' } as any)
+      const result = await service.issueContributorCredential(buildAuthInfo())
+
+      expect(result.txCode).toBe('12345678')
+      expect(issuerServiceMock.createIssuer).toHaveBeenCalledOnce()
+    })
+
+    it('runs one issuer registration when two offers overlap', async () => {
+      let release!: () => void
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      vi.mocked(issuerServiceMock.find).mockImplementation(async () => {
+        await gate
+        return []
+      })
+
+      const first = service.issueContributorCredential(buildAuthInfo())
+      const second = service.issueContributorCredential(buildAuthInfo())
+      release()
+      const [left, right] = await Promise.all([first, second])
+
+      expect(left.txCode).toBe('12345678')
+      expect(right.txCode).toBe('12345678')
+      expect(issuerServiceMock.createIssuer).toHaveBeenCalledOnce()
     })
   })
 })

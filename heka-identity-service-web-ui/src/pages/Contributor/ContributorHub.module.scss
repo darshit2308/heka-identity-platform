@@ -1,3 +1,5 @@
+@use "sass:color";
+
 // ContributorHub.module.scss
 // ── Design tokens (Hiero brand) ──────────────────────────────────────────
 $pink: #c6136a;
@@ -7,7 +9,7 @@ $black: #141115;
 $gray-900: #18161b;
 $gray-600: #6f6b74;
 $gray-200: #e9e5ea;
-$white: #ffffff;
+$white: #fff;
 $gradient: linear-gradient(135deg, #ff8a3d 0%, #ef3e7f 55%, #8b5cf6 100%);
 
 .container {
@@ -34,11 +36,23 @@ $gradient: linear-gradient(135deg, #ff8a3d 0%, #ef3e7f 55%, #8b5cf6 100%);
     content: '';
     position: absolute;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgb(255 255 255 / 8%);
     pointer-events: none;
   }
-  &::before { width: 220px; height: 220px; top: -110px; right: -60px; }
-  &::after  { width: 160px; height: 160px; bottom: -90px; left: -40px; }
+
+  &::before {
+    width: 220px;
+    height: 220px;
+    top: -110px;
+    right: -60px;
+  }
+
+  &::after {
+    width: 160px;
+    height: 160px;
+    bottom: -90px;
+    left: -40px;
+  }
 }
 
 .heroIconWrap {
@@ -51,12 +65,15 @@ $gradient: linear-gradient(135deg, #ff8a3d 0%, #ef3e7f 55%, #8b5cf6 100%);
   align-items: center;
   justify-content: center;
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgb(255 255 255 / 16%);
+  border: 1px solid rgb(255 255 255 / 25%);
   backdrop-filter: blur(6px);
 }
 
-.heroIcon { font-size: 38px; line-height: 1; }
+.heroIcon {
+  font-size: 38px;
+  line-height: 1;
+}
 
 .heroTitle {
   position: relative;
@@ -72,7 +89,7 @@ $gradient: linear-gradient(135deg, #ff8a3d 0%, #ef3e7f 55%, #8b5cf6 100%);
   position: relative;
   z-index: 1;
   font-size: 15px;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgb(255 255 255 / 85%);
   line-height: 1.7;
   max-width: 420px;
   margin: 0 auto;
@@ -88,9 +105,15 @@ $gradient: linear-gradient(135deg, #ff8a3d 0%, #ef3e7f 55%, #8b5cf6 100%);
   margin: 0 0 16px 4px;
 }
 
-.stepsGrid { display: flex; flex-direction: column; }
+.stepsGrid {
+  display: flex;
+  flex-direction: column;
+}
 
-.stepRow { display: flex; gap: 18px; }
+.stepRow {
+  display: flex;
+  gap: 18px;
+}
 
 .stepNumCol {
   display: flex;
@@ -132,13 +155,24 @@ $gradient: linear-gradient(135deg, #ff8a3d 0%, #ef3e7f 55%, #8b5cf6 100%);
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 14px 28px -12px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 14px 28px -12px rgb(0 0 0 / 12%);
     border-color: rgba($pink, 0.3);
   }
 }
 
-.stepTitle { font-size: 15px; font-weight: 700; color: $gray-900; margin: 0 0 4px; }
-.stepText  { font-size: 13px; color: $gray-600; line-height: 1.6; margin: 0; }
+.stepTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: $gray-900;
+  margin: 0 0 4px;
+}
+
+.stepText {
+  font-size: 13px;
+  color: $gray-600;
+  line-height: 1.6;
+  margin: 0;
+}
 
 /* ── Wallet notice ──────────────────────────────────────────────────────── */
 .walletNotice {
@@ -164,8 +198,20 @@ $gradient: linear-gradient(135deg, #ff8a3d 0%, #ef3e7f 55%, #8b5cf6 100%);
 }
 
 .walletIcon { font-size: 19px; }
-.walletTitle { font-size: 14px; font-weight: 700; color: $gray-900; margin: 0 0 4px; }
-.walletText  { font-size: 13px; color: $gray-600; line-height: 1.6; margin: 0; }
+
+.walletTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: $gray-900;
+  margin: 0 0 4px;
+}
+
+.walletText {
+  font-size: 13px;
+  color: $gray-600;
+  line-height: 1.6;
+  margin: 0;
+}
 
 .link {
   color: $pink;
@@ -191,24 +237,38 @@ $gradient: linear-gradient(135deg, #ff8a3d 0%, #ef3e7f 55%, #8b5cf6 100%);
   font-weight: 700;
   letter-spacing: -0.2px;
   cursor: pointer;
-  box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 12px 28px -10px rgb(0 0 0 / 45%);
   transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 
   &:hover {
     transform: translateY(-2px);
-    background: lighten($black, 8%);
-    box-shadow: 0 16px 32px -10px rgba(0, 0, 0, 0.5);
+    background: color.adjust($black, $lightness: 8%);
+    box-shadow: 0 16px 32px -10px rgb(0 0 0 / 50%);
     .btnArrow { transform: translateX(4px); }
   }
   &:active { transform: translateY(0); }
 }
 
-.btnArrow { display: inline-block; transition: transform 0.15s ease; }
+.btnArrow {
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
-@media (max-width: 480px) {
-  .container { padding: 40px 16px 56px; gap: 32px; }
-  .heroPanel { padding: 40px 20px 36px; border-radius: 22px; }
+@media (width <= 480px) {
+  .container {
+    padding: 40px 16px 56px;
+    gap: 32px;
+  }
+
+  .heroPanel {
+    padding: 40px 20px 36px;
+    border-radius: 22px;
+  }
   .heroTitle { font-size: 24px; }
-  .startBtn { width: 100%; padding: 16px 24px; }
+
+  .startBtn {
+    width: 100%;
+    padding: 16px 24px;
+  }
 }

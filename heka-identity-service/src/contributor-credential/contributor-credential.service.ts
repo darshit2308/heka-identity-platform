@@ -1,7 +1,14 @@
 import { DidDocument } from '@credo-ts/core'
 import { OpenId4VciCredentialFormatProfile } from '@credo-ts/openid4vc'
 import { EntityManager } from '@mikro-orm/core'
-import { Inject, Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common'
+import {
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+  OnApplicationBootstrap,
+} from '@nestjs/common'
 import { ConfigType } from '@nestjs/config'
 
 import { Agent, AGENT_TOKEN } from 'common/agent'
@@ -21,8 +28,11 @@ import { CredentialIssuanceMetadata } from 'utils/oid4vc'
 
 import {
   CONTRIBUTOR_CREDENTIAL_DISPLAY_NAME,
+  CONTRIBUTOR_CREDENTIAL_LIFETIME_SECONDS,
+  CONTRIBUTOR_CREDENTIAL_OFFER_TTL_SECONDS,
   CONTRIBUTOR_CREDENTIAL_SELECTIVE_CLAIMS,
   CONTRIBUTOR_CREDENTIAL_SUPPORTED_ID,
+  CONTRIBUTOR_CREDENTIAL_TX_CODE_LENGTH,
   CONTRIBUTOR_CREDENTIAL_VCT,
 } from './contributor-credential.constants'
 import { ContributorCredentialPayload } from './contributor-credential.types'
@@ -57,6 +67,8 @@ import { ContributorCredentialPayload } from './contributor-credential.types'
 @Injectable()
 export class ContributorCredentialService implements OnApplicationBootstrap {
   private readonly logger = new Logger(ContributorCredentialService.name)
+  private issuerConfigured = false
+  private configurationLock: Promise<boolean> | null = null
 
   public constructor(
     @Inject(AGENT_TOKEN) private readonly agent: Agent,
@@ -83,15 +95,41 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
    */
   public async onApplicationBootstrap(): Promise<void> {
     try {
-      await this.bootstrapStaticIssuer()
+      await this.ensureIssuerConfigured()
     } catch (error) {
-      // Bootstrap failures are logged but do not prevent the application from
-      // starting — the service will simply be unavailable until the underlying
-      // issue is resolved (e.g. missing demo tenant wallet).
+      // A missing demo wallet is retried on the next offer. Other failures are
+      // logged and also retried, so a restart is not required to recover.
+      if (error instanceof NotFoundException) return
       this.logger.error(
         `ContributorCredentialService bootstrap failed: ${error instanceof Error ? error.message : String(error)}`,
       )
     }
+  }
+
+  /**
+   * Registers the issuer when it is not ready yet. Overlapping calls share one
+   * attempt. A failed or skipped attempt is not remembered, so a later wallet
+   * or DID setup can succeed without restarting the process.
+   */
+  private ensureIssuerConfigured(): Promise<void> {
+    if (this.issuerConfigured) return Promise.resolve()
+    const pending = this.configurationLock ?? this.startIssuerConfiguration()
+    return pending.then((ready) => {
+      if (!ready) {
+        throw new NotFoundException(
+          'Static contributor credential issuer is not configured. Initialise the demo tenant wallet and retry.',
+        )
+      }
+      this.issuerConfigured = true
+    })
+  }
+
+  private startIssuerConfiguration(): Promise<boolean> {
+    const run = this.bootstrapStaticIssuer().finally(() => {
+      if (this.configurationLock === run) this.configurationLock = null
+    })
+    this.configurationLock = run
+    return run
   }
 
   // ---------------------------------------------------------------------------
@@ -110,17 +148,20 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
    * because SD-JWT VCs do not use status lists, and the session service
    * requires a full `AuthInfo.user` entity just to query the status list.
    *
-   * @returns An `openid-credential-offer://` URI the wallet can scan.
+   * @returns The offer URI and the transaction code. The code is not part of the URI.
    *
    * @throws {NotFoundException} No binding for this user, or the issuer tenant is missing.
    * @throws {ConflictException} GitHub is linked but GPG verification is not complete.
    */
-  public async issueContributorCredential(authInfo: AuthInfo): Promise<string> {
+  public async issueContributorCredential(
+    authInfo: AuthInfo,
+  ): Promise<{ credentialOffer: string; txCode: string; expiresAt: string }> {
     const contributor = await this.contributorOnboardingService.getVerifiedBindingByUser(
       authInfo.tenantId,
       authInfo.userId,
       authInfo.walletId,
     )
+    await this.ensureIssuerConfigured()
 
     const tenantId = await this.resolveDemoTenantId()
     if (!tenantId) {
@@ -130,6 +171,8 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
     }
 
     let credentialOffer: string | undefined
+    let txCode: string | undefined
+    let expiresAt: Date | undefined
 
     await withTenantAgent({ agent: this.agent, tenantId }, async (tenantAgent) => {
       const issuerDid = await this.resolveIssuerDidFromTenant(tenantAgent)
@@ -165,24 +208,35 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
       const result = await tenantAgent.openid4vc.issuer.createCredentialOffer({
         issuerId: issuerDid,
         credentialConfigurationIds: [CONTRIBUTOR_CREDENTIAL_SUPPORTED_ID],
-        preAuthorizedCodeFlowConfig: {},
+        preAuthorizedCodeFlowConfig: {
+          txCode: {
+            input_mode: 'numeric',
+            length: CONTRIBUTOR_CREDENTIAL_TX_CODE_LENGTH,
+            description: 'Enter the code shown on the Heka contributor page.',
+          },
+        },
+        expirationInSeconds: CONTRIBUTOR_CREDENTIAL_OFFER_TTL_SECONDS,
         issuanceMetadata: {
           credentials: [issuanceMetadata],
         },
       })
 
       credentialOffer = result.credentialOffer
+      txCode = result.issuanceSession.userPin
+      expiresAt = result.issuanceSession.expiresAt
     })
 
-    if (!credentialOffer) {
-      throw new NotFoundException('Failed to generate credential offer — tenant agent returned no offer URI.')
+    if (!credentialOffer || !txCode || !expiresAt) {
+      throw new InternalServerErrorException(
+        'Failed to generate a transaction-code credential offer. The offer URI alone is not enough to issue this credential.',
+      )
     }
 
     this.logger.log(
       `Credential offer created for contributor @${contributor.githubUsername} (account ${contributor.githubAccountId})`,
     )
 
-    return credentialOffer
+    return { credentialOffer, txCode, expiresAt: expiresAt.toISOString() }
   }
 
   // ---------------------------------------------------------------------------
@@ -197,16 +251,17 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
    *   4. Ensures the `GithubContributorCredentialSdJwt` credential config is
    *      registered in the issuer's `credential_configurations_supported`.
    */
-  private async bootstrapStaticIssuer(): Promise<void> {
+  private async bootstrapStaticIssuer(): Promise<boolean> {
     const tenantId = await this.resolveDemoTenantId()
     if (!tenantId) {
       this.logger.warn(
         'Demo tenant wallet not found — skipping contributor credential issuer bootstrap. ' +
           `Set the DEMO_USER environment variable and call POST /prepare-wallet to initialise the tenant.`,
       )
-      return
+      return false
     }
 
+    let configured = false
     await withTenantAgent({ agent: this.agent, tenantId }, async (tenantAgent) => {
       // Step 1: Resolve the tenant's primary DID
       const issuerDid = await this.resolveIssuerDidFromTenant(tenantAgent)
@@ -235,6 +290,7 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
           ],
         })
         this.logger.log(`OID4VCI issuer registered for DID ${issuerDid}`)
+        configured = true
         return // createIssuer already included the credential config
       }
 
@@ -257,6 +313,7 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
         this.logger.log(
           `${CONTRIBUTOR_CREDENTIAL_SUPPORTED_ID} credential configuration updated for issuer ${issuerDid}`,
         )
+        configured = true
         return
       }
 
@@ -266,7 +323,9 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
         credentialsSupported: [this.buildCredentialConfiguration()],
       })
       this.logger.log(`${CONTRIBUTOR_CREDENTIAL_SUPPORTED_ID} registered in existing issuer ${issuerDid}`)
+      configured = true
     })
+    return configured
   }
 
   /**
@@ -329,6 +388,7 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
       gpgFingerprint: contributor.gpgFingerprint,
       verifiedAt: contributor.verifiedAt,
       walletId: contributor.walletId,
+      exp: Math.floor(Date.now() / 1000) + CONTRIBUTOR_CREDENTIAL_LIFETIME_SECONDS,
     }
   }
 

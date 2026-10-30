@@ -7,7 +7,7 @@ $gray-900: #18161b;
 $gray-600: #6f6b74;
 $gray-200: #e9e5ea;
 $gray-100: #f4f2f4;
-$white: #ffffff;
+$white: #fff;
 $gradient: linear-gradient(135deg, #ff8a3d 0%, #ef3e7f 55%, #8b5cf6 100%);
 
 .container {
@@ -52,7 +52,10 @@ $gradient: linear-gradient(135deg, #ff8a3d 0%, #ef3e7f 55%, #8b5cf6 100%);
   }
 }
 
-.backIcon { display: inline-block; transition: transform 0.15s ease; }
+.backIcon {
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
 
 .title {
   font-size: 26px;
@@ -95,17 +98,27 @@ $gradient: linear-gradient(135deg, #ff8a3d 0%, #ef3e7f 55%, #8b5cf6 100%);
 .stepWrapper {
   margin-top: 8px;
   flex: 1;
-  animation: fadeIn 0.3s ease;
+  animation: fade-in 0.3s ease;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
-@media (max-width: 480px) {
-  .container { padding: 28px 16px 56px; gap: 20px; }
+@media (width <= 480px) {
+  .container {
+    padding: 28px 16px 56px;
+    gap: 20px;
+  }
   .title { font-size: 22px; }
   .header { align-items: flex-start; }
 }
