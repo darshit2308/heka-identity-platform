@@ -1,30 +1,16 @@
-import React, { useState } from 'react'
+import React from 'react'
 
 interface Props {
-  holderDid: string
   credentialCount: number
 }
 
 const PINK = '#c6136a'
 const CARD = '#1a1118'
 
-export const WalletStatus: React.FC<Props> = ({ holderDid, credentialCount }) => {
-  const [didCopied, setDidCopied] = useState(false)
-
-  const truncateDid = (did: string) =>
-    did.length <= 38 ? did : `${did.slice(0, 18)}…${did.slice(-12)}`
-
-  const handleCopyDid = async () => {
-    await navigator.clipboard.writeText(holderDid)
-    setDidCopied(true)
-    setTimeout(() => setDidCopied(false), 2000)
-  }
-
+export const WalletStatus: React.FC<Props> = ({ credentialCount }) => {
   return (
     <div style={s.card}>
-      {/* Status row */}
       <div style={s.statusRow}>
-        {/* Pulsing green dot */}
         <div style={s.dotWrap}>
           <div style={s.dotPulse} />
           <div style={s.dot} />
@@ -34,25 +20,8 @@ export const WalletStatus: React.FC<Props> = ({ holderDid, credentialCount }) =>
           {credentialCount} credential{credentialCount !== 1 ? 's' : ''}
         </div>
       </div>
-
-      {/* Gradient separator */}
       <div style={s.sep} />
-
-      {/* DID block */}
-      <div style={s.didSection}>
-        <span style={s.fieldLabel}>Holder DID</span>
-        <div style={s.didRow}>
-          <code style={s.didCode}>{truncateDid(holderDid)}</code>
-          <button style={s.copyBtn} onClick={() => void handleCopyDid()} title="Copy full DID">
-            {didCopied ? (
-              <span style={{ color: '#4ade80', fontSize: 13 }}>✓</span>
-            ) : (
-              <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>⎘</span>
-            )}
-          </button>
-        </div>
-        <span style={s.didMethod}>did:jwk · ECDSA P-256 · device-bound</span>
-      </div>
+      <p style={s.note}>Holder keys stay in the wallet page. They are created non-extractable and are not available to this popup.</p>
     </div>
   )
 }
@@ -100,26 +69,7 @@ const s: Record<string, React.CSSProperties> = {
     background: 'linear-gradient(90deg, transparent, rgba(198,19,106,0.15) 40%, rgba(198,19,106,0.15) 60%, transparent)',
     marginBottom: 12,
   },
-  didSection: { display: 'flex', flexDirection: 'column', gap: 5 },
-  fieldLabel: {
-    fontSize: 9, color: 'rgba(255,255,255,0.3)',
-    textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600,
-  },
-  didRow: { display: 'flex', alignItems: 'center', gap: 8 },
-  didCode: {
-    flex: 1, fontSize: 11, color: 'rgba(255,255,255,0.75)',
-    background: 'rgba(0,0,0,0.35)', padding: '5px 9px', borderRadius: 7,
-    fontFamily: "'JetBrains Mono','Fira Code',monospace",
-    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-    border: '1px solid rgba(255,255,255,0.06)',
-  },
-  copyBtn: {
-    width: 28, height: 28, border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: 7, background: 'rgba(255,255,255,0.03)',
-    cursor: 'pointer', display: 'flex', alignItems: 'center',
-    justifyContent: 'center', flexShrink: 0, transition: 'background 0.15s',
-  },
-  didMethod: { fontSize: 10, color: 'rgba(255,255,255,0.2)' },
+  note: { fontSize: 11, color: 'rgba(255,255,255,0.45)', lineHeight: 1.5 },
 }
 
 // inject pulse keyframe once

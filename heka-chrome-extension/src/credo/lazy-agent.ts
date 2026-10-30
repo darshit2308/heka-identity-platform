@@ -19,6 +19,9 @@ export async function getOrCreateAgent(): Promise<Agent> {
     const agent = new Agent({
       config: {
         allowInsecureHttpUrls: process.env.NODE_ENV !== 'production',
+        // A fresh IndexedDB has no storage version. Credo refuses to start
+        // until that record is brought forward to the current framework version.
+        autoUpdateStorageOnStartup: true,
       },
       dependencies: browserAgentDependencies,
       modules: {

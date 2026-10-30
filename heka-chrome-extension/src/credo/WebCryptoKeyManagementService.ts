@@ -39,7 +39,11 @@ const GCM_ALGORITHMS = new Set(['A128GCM', 'A192GCM', 'A256GCM'])
 export class WebCryptoKeyManagementService implements KeyManagementService {
   public readonly backend = 'webcrypto-browser'
 
-  private readonly dbPromise = openKeyDatabase()
+  private readonly dbPromise: Promise<IDBDatabase>
+
+  public constructor(dbName = 'heka-wallet-kms') {
+    this.dbPromise = openKeyDatabase(dbName)
+  }
 
   public isOperationSupported(_agentContext: AgentContext, operation: KmsOperation): boolean {
     switch (operation.operation) {
@@ -264,9 +268,9 @@ function concatBytes(left: Uint8Array, right: Uint8Array): Uint8Array {
   return combined
 }
 
-function openKeyDatabase(): Promise<IDBDatabase> {
+function openKeyDatabase(dbName: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open('heka-wallet-kms', 1)
+    const request = indexedDB.open(dbName, 1)
     request.onupgradeneeded = () => {
       const db = request.result
       if (!db.objectStoreNames.contains('keys')) {

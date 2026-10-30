@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
-import type { HeldCredential } from '../../wallet/credential-store'
+import type { CredentialSummary } from '../../wallet/summary-cache'
 
 interface Props {
-  credentials: HeldCredential[]
+  credentials: CredentialSummary[]
 }
 
 const PINK = '#c6136a'
@@ -48,15 +48,16 @@ export const CredentialList: React.FC<Props> = ({ credentials }) => {
   )
 }
 
-const CredentialCard: React.FC<{ credential: HeldCredential }> = ({ credential }) => {
+const CredentialCard: React.FC<{ credential: CredentialSummary }> = ({ credential }) => {
   const [expanded, setExpanded] = useState(false)
   const label = VCT_LABELS[credential.vct] ?? 'Verifiable Credential'
   const icon  = VCT_ICONS[credential.vct] ?? '🪪'
-  const receivedDate = new Date(credential.receivedAt).toLocaleDateString('en-US', {
-    year: 'numeric', month: 'short', day: 'numeric',
-  })
-  const truncate = (s: string, head = 14, tail = 8) =>
-    s.length > head + tail + 3 ? `${s.slice(0, head)}…${s.slice(-tail)}` : s
+  const receivedDate = credential.issuedAt
+    ? new Date(credential.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+    : 'date unavailable'
+  const truncate = (value: string, head = 14, tail = 8) =>
+    value.length > head + tail + 3 ? `${value.slice(0, head)}…${value.slice(-tail)}` : value
+  const claims = Object.entries(credential.claims).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
 
   return (
     <div style={s.card}>
@@ -69,7 +70,7 @@ const CredentialCard: React.FC<{ credential: HeldCredential }> = ({ credential }
         </div>
         <div style={s.cardMeta}>
           <span style={s.cardTitle}>{label}</span>
-          <span style={s.cardDate}>Received {receivedDate}</span>
+          <span style={s.cardDate}>Issued {receivedDate}</span>
         </div>
         <div style={s.validBadge}>
           <span style={s.validDot} />
@@ -82,9 +83,11 @@ const CredentialCard: React.FC<{ credential: HeldCredential }> = ({ credential }
 
       {expanded && (
         <div style={s.cardBody}>
-          <InfoRow label="Type"   value={truncate(credential.vct, 22, 10)} mono />
-          <InfoRow label="Issuer" value={truncate(credential.issuerDid, 16, 8)} mono />
-          <InfoRow label="ID"     value={truncate(credential.id, 14, 8)} mono />
+          <InfoRow label="Type" value={truncate(credential.vct, 22, 10)} mono />
+          <InfoRow label="Issuer" value={truncate(credential.issuer, 16, 8)} mono />
+          {claims.map(([name, value]) => (
+            <InfoRow key={name} label={name} value={truncate(value, 18, 8)} mono />
+          ))}
         </div>
       )}
     </div>

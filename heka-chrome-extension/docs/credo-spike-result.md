@@ -1,36 +1,40 @@
-# Credo-TS in Browser Extension Spike: Evaluation & Results
+# Credo-TS browser wallet
 
-## Objective
-Evaluate whether `@credo-ts/core` (with OID4VCI holder support) can be embedded directly within the Heka Chrome Extension (Manifest V3) as a client-side wallet agent.
+`@credo-ts/core` 0.7.0 and `@credo-ts/openid4vc` 0.7.0 run in `wallet.html`, a durable extension page. The popup and the service worker do not import Credo. They read a credential summary from `chrome.storage.local`.
 
-## Background
-Mentor Alexander requested re-evaluating whether Credo could be run inside the extension instead of building custom SD-JWT VC parsing and storage routines.
+Askar is not used. Records go through `IndexedDbStorageService`, registered on `InjectionSymbols.StorageService` by `BrowserStorageModule`. Private keys are created non-extractable in `WebCryptoKeyManagementService` (`backend: webcrypto-browser`). `importKey` is rejected.
 
-## Technical Findings
+## Build workarounds
 
-### 1. Manifest V3 Service Worker Runtime Limitations
-- Manifest V3 extensions execute background tasks within ephemeral **Service Workers**, rather than persistent background pages.
-- Service Workers terminate after ~30 seconds of inactivity, terminating any long-lived Credo agent sessions, ongoing DIDComm connections, or event listeners.
+- `express` is aliased to `src/credo/express-stub.ts`. `@credo-ts/openid4vc` imports it, and the holder path does not call it.
+- `@digitalcredentials/open-badges-context` is aliased to `js/index.js`. The published `module` field points at a file that is not in the tarball.
+- `KeyManagementModule` is imported from `@credo-ts/core/kms`. It is not exported from the package root.
+- The node `eval('require')` fallback in `@sphereon/kmp-mdoc-core`, and the `Function` / `eval` global lookup in `reflect-metadata`, are rewritten to browser-safe equivalents during the production build. They are not on the holder path.
 
-### 2. Native Dependencies and Askar Wallet Backend
-- Credo-TS depends on Askar (`@openwallet-foundation/askar-nodejs` or `@openwallet-foundation/askar-shared`) for secure credential and key storage.
-- Askar's native Node.js bindings cannot run in a browser extension context.
-- While `@openwallet-foundation/askar-react-native` exists for mobile, no production-ready browser WebAssembly package of Askar was compatible with Chrome MV3's strict Content Security Policy (`script-src 'self'`; dynamic code compilation and `wasm-eval` restrictions).
+`new Function` remains in `dist/wallet/index.js`. It comes from the cbor-x / msgpackr record compiler and from Ajv. Those compilers did not run during `agent.initialize()`.
 
-### 3. Package Footprint and Polyfills
-- Bundling `@credo-ts/core`, `@credo-ts/openid4vc`, Node crypto polyfills, and buffer modules exceeded Chrome Web Store extension bundle practical limits (~15+ MB uncompressed bundle).
-- Transpilation with Vite/Rollup required heavy shimming of Node.js built-ins (`crypto`, `stream`, `events`, `buffer`, `net`), leading to fragile builds and runtime initialization failures in service workers.
+## Runtime
 
-## Decision
+Chrome 156 ignores `--load-extension`, so the unpacked extension could not be started from the command line. The production `dist/` was served with the Manifest V3 extension content security policy:
 
-| Approach | Feasibility | Decision |
-|---|---|---|
-| **Direct Credo-TS in Extension MV3** | ❌ Blocked | Rejected due to Askar native/WASM constraints and MV3 service worker lifecycle |
-| **Lightweight Prototype Extension** | ✅ Operational | **Adopted for Week 7**: Native web-crypto + `chrome.storage.local` + `postMessage` bridge |
-| **Dedicated External Wallet (Mobile/Desktop)** | ✅ Production path | Recommended production target: Bifold / Credo-TS React Native mobile wallet via OID4VCI |
+`script-src 'self' 'wasm-unsafe-eval'; object-src 'self'`
 
-## Prototype Notice & Security Disclaimer
-The current Chrome Extension wallet is an **educational and testing prototype**:
-- Credential offers (`openid-credential-offer://`) are accepted via a content-script bridge (`heka-bridge.js`).
-- Credentials are stored in `chrome.storage.local`.
-- Holder binding in the issued SD-JWT VC uses `walletId` as a demo approximation. Full holder binding with proof-of-possession (KB-JWT) requires hardware-backed device keys (WebAuthn / Passkeys).
+`agent.initialize()` completed. A fresh IndexedDB is below Credo's storage version, so the agent is created with `autoUpdateStorageOnStartup: true`. Without that flag, initialization throws and asks for an update from storage version 0.1 to 0.5.
+
+| Measurement | Value |
+|---|---|
+| `dist/wallet/index.js` | 3,956.94 kB minified, 976.99 kB gzip |
+| `dist/popup/index.js` | 18.26 kB minified, 5.58 kB gzip |
+| `dist/background/service-worker.js` | 0.96 kB minified, 0.54 kB gzip |
+| `dist/content-scripts/heka-bridge.js` | 0.50 kB minified, 0.35 kB gzip |
+| `agent.initialize()`, empty IndexedDB | 66 ms |
+| `agent.initialize()`, existing storage | 34 ms |
+| Credential receive | not measured; no issuer was running |
+
+The wallet entry is large because `@credo-ts/core` statically imports the modules the holder needs, so the dynamic import in `lazy-agent.ts` does not split them out of `wallet/index.js`. The popup bundle does not contain Credo.
+
+## Holder behaviour
+
+OID4VCI uses `agent.openid4vc.holder`. Each issued SD-JWT record is stored with `agent.sdJwtVc.store`. The holder binding is a P-256 `Kms.PublicJwk`. Issuers that require a key attestation are rejected.
+
+OID4VP accepts only DCQL. `handlePresentationRequest` throws when the resolved request has no `dcql` property. Presentation Exchange is not used.

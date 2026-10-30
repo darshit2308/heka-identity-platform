@@ -16,6 +16,25 @@ import { join } from 'path';
  * We handle this with a custom writeBundle Rollup plugin hook (no extra deps).
  */
 
+/**
+ * Credo and its mdoc dependency contain eval/new Function fallbacks that
+ * Manifest V3 will not execute. Rewrite the dead browser paths so the
+ * shipped bundle does not contain those calls.
+ */
+const stripExtensionUnsafeEval = () => ({
+  name: 'strip-extension-unsafe-eval',
+  renderChunk(code: string) {
+    const next = code
+      .replaceAll('Function("return this;")()', 'globalThis')
+      .replaceAll('(void 0, eval)("(function() { return this; })()")', 'undefined')
+      .replaceAll(
+        "return eval('require')('node:crypto').webcrypto.subtle;",
+        "throw new Error('Node crypto is not available in the browser extension');",
+      )
+    return next === code ? null : { code: next, map: null }
+  },
+})
+
 /** Inline Rollup plugin that copies static assets into dist after the build. */
 const copyExtensionAssets = () => ({
   name: 'copy-extension-assets',
@@ -48,7 +67,7 @@ const copyExtensionAssets = () => ({
 });
 
 export default defineConfig({
-  plugins: [react(), copyExtensionAssets()],
+  plugins: [react(), stripExtensionUnsafeEval(), copyExtensionAssets()],
   build: {
     outDir: 'dist',
     emptyOutDir: true,

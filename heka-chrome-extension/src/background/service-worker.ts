@@ -1,5 +1,4 @@
-import { getOrCreateKeyPair } from '../wallet/key-store'
-import { getCredentialCount } from '../wallet/credential-store'
+import { CREDENTIAL_COUNT_KEY, PENDING_OFFER_KEY } from '../wallet/storage-keys'
 
 // ── Types for cross-context messages ─────────────────────────────────────────
 
@@ -14,25 +13,9 @@ export type ExtensionResponse =
   | { type: 'OFFER_ACKNOWLEDGED' }
   | { type: 'STATUS'; initialized: boolean; credentialCount: number }
 
-// ── Install handler ───────────────────────────────────────────────────────────
-
-chrome.runtime.onInstalled.addListener(async (details) => {
-  if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) {
-    // Generate the holder key pair on first install. This is done here
-    // (service worker context) so the popup already has a key ready when
-    // the user opens it for the first time.
-    try {
-      await getOrCreateKeyPair()
-      console.log('[Heka Wallet] Holder key pair generated on install')
-    } catch (err) {
-      console.error('[Heka Wallet] Key generation failed on install:', err)
-    }
-  }
-
-  await updateBadge()
+chrome.runtime.onInstalled.addListener(() => {
+  void updateBadge()
 })
-
-// ── Message handler ───────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener(
   (
@@ -40,7 +23,6 @@ chrome.runtime.onMessage.addListener(
     _sender: chrome.runtime.MessageSender,
     sendResponse: (response: ExtensionResponse) => void,
   ): boolean => {
-    // Return true to keep the message channel open for async responses
     void handleMessage(message, sendResponse)
     return true
   },
@@ -57,9 +39,7 @@ async function handleMessage(
     }
 
     case 'RECEIVE_OFFER': {
-      // Store the offer URI in local storage instead of forcibly opening a window.
-      // The popup will check storage when the user clicks the extension icon.
-      await chrome.storage.local.set({ pendingOfferUri: message.offerUri })
+      await chrome.storage.local.set({ [PENDING_OFFER_KEY]: message.offerUri })
       sendResponse({ type: 'OFFER_ACKNOWLEDGED' })
       break
     }
@@ -71,11 +51,10 @@ async function handleMessage(
     }
 
     case 'GET_STATUS': {
-      const credentialCount = await getCredentialCount()
       sendResponse({
         type: 'STATUS',
         initialized: true,
-        credentialCount,
+        credentialCount: await readCredentialCount(),
       })
       break
     }
@@ -85,27 +64,23 @@ async function handleMessage(
   }
 }
 
-// ── Badge management ──────────────────────────────────────────────────────────
-
-/**
- * Updates the extension action badge to show the number of held credentials.
- * A badge count of 0 clears the badge text entirely.
- */
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'local' || !changes.credentialCount) return
-  const count = Number(changes.credentialCount.newValue ?? 0)
-  void chrome.action.setBadgeText({ text: count > 0 ? String(count) : '' })
-  if (count > 0) {
-    void chrome.action.setBadgeBackgroundColor({ color: '#22c55e' })
-  }
+  if (area !== 'local' || !changes[CREDENTIAL_COUNT_KEY]) return
+  void applyBadge(Number(changes[CREDENTIAL_COUNT_KEY].newValue ?? 0))
 })
 
 async function updateBadge(): Promise<void> {
-  const count = await getCredentialCount()
-  if (count === 0) {
-    await chrome.action.setBadgeText({ text: '' })
-  } else {
-    await chrome.action.setBadgeText({ text: String(count) })
-    await chrome.action.setBadgeBackgroundColor({ color: '#22c55e' }) // green-500
+  await applyBadge(await readCredentialCount())
+}
+
+async function readCredentialCount(): Promise<number> {
+  const stored = await chrome.storage.local.get(CREDENTIAL_COUNT_KEY)
+  return Number(stored[CREDENTIAL_COUNT_KEY] ?? 0)
+}
+
+async function applyBadge(count: number): Promise<void> {
+  await chrome.action.setBadgeText({ text: count > 0 ? String(count) : '' })
+  if (count > 0) {
+    await chrome.action.setBadgeBackgroundColor({ color: '#22c55e' })
   }
 }

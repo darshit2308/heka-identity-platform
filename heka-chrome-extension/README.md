@@ -1,20 +1,24 @@
 # Heka Web Wallet Chrome Extension
 
-Browser extension prototype for holding and managing Hiero ecosystem Verifiable Credentials (SD-JWT VC).
+Chrome extension that holds a GithubContributorCredential. Credo 0.7.0 runs in the `wallet.html` extension page. The popup and the service worker stay free of Credo and read a credential summary from `chrome.storage.local`.
 
-## Features
-- **OID4VCI Credential Offer Receiver**: Receives `openid-credential-offer://` URIs from the Heka Identity Platform via content script bridge.
-- **SD-JWT VC Support**: Visualizes issued GitHub Contributor Credentials with selective disclosure tags.
-- **Local Vault**: Stores credentials safely in `chrome.storage.local`.
+## What it does
 
-## Architecture Note: Credo-TS Evaluation
-A technical spike was conducted to evaluate embedding Credo-TS directly within the extension's Manifest V3 service worker. Due to Askar native/WASM restrictions in browser extension runtimes, a lightweight prototype was implemented instead. See [Credo Spike Evaluation](docs/credo-spike-result.md) for full details.
+- Receives an `openid-credential-offer://` URI on the wallet page through the Credo OID4VCI holder.
+- Stores the SD-JWT in IndexedDB and publishes a summary for the popup and the toolbar badge.
+- Presents a credential with OID4VP only when the request uses DCQL.
+- Creates holder keys with WebCrypto. The private key is non-extractable and cannot be imported.
 
-> **Security Notice**: This extension is a development prototype for demonstrating end-to-end credential issuance and selective disclosure. Production holder binding requires hardware-backed device keys (WebAuthn/Passkeys).
+Holder keys are not hardware-backed. A key attestation, when an issuer requires one, is not available in this wallet.
+
+The measured bundle sizes and initialization times are in [docs/credo-spike-result.md](docs/credo-spike-result.md).
 
 ## Development
+
 ```bash
-npm install
-npm run build
+yarn install
+yarn test
+yarn build
 ```
-Load the `dist/` directory into Chrome via `chrome://extensions` (Developer Mode > Load Unpacked).
+
+Load `dist/` in Chrome at `chrome://extensions` with Developer Mode, then Load unpacked. Credential offers open `wallet.html`. The popup only shows the summary and sends the offer to that page.

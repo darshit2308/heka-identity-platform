@@ -1,16 +1,13 @@
 import React, { useState } from 'react'
-import { receiveCredential, type ReceiveResult } from '../../oid4vci/receive'
+
+import { walletPageUrl } from '../../wallet/page-url'
 
 interface Props {
   initialOfferUri?: string
   onReceived: () => void
 }
 
-type ReceiveState =
-  | { status: 'idle' }
-  | { status: 'receiving' }
-  | { status: 'success'; vct: string }
-  | { status: 'error'; error: string; detail?: string }
+type ReceiveState = { status: 'idle' } | { status: 'error'; error: string }
 
 const PINK = '#c6136a'
 const RED  = '#e83d6f'
@@ -19,20 +16,17 @@ export const ReceiveCredential: React.FC<Props> = ({ initialOfferUri, onReceived
   const [offerUri, setOfferUri] = useState(initialOfferUri ?? '')
   const [state, setState] = useState<ReceiveState>({ status: 'idle' })
 
-  const handleReceive = async () => {
+  const handleReceive = () => {
     const trimmed = offerUri.trim()
-    if (!trimmed) return
-    setState({ status: 'receiving' })
-    const result: ReceiveResult = await receiveCredential(trimmed)
-    if (result.ok) {
-      setState({ status: 'success', vct: result.credential.vct })
-      setTimeout(() => onReceived(), 1600)
-    } else {
-      setState({ status: 'error', error: result.error, detail: result.detail })
+    if (!trimmed.startsWith('openid-credential-offer:')) {
+      setState({ status: 'error', error: 'Paste an openid-credential-offer URI' })
+      return
     }
+    window.open(walletPageUrl({ offer: trimmed }))
+    onReceived()
   }
 
-  const isDisabled = state.status === 'receiving' || !offerUri.trim()
+  const isDisabled = !offerUri.trim()
 
   return (
     <div style={s.container}>
@@ -46,8 +40,8 @@ export const ReceiveCredential: React.FC<Props> = ({ initialOfferUri, onReceived
       </div>
 
       <p style={s.description}>
-        Paste the <code style={s.code}>openid-credential-offer://</code> URI from Heka below.
-        Your credential will be cryptographically verified and stored on this device.
+        Paste the <code style={s.code}>openid-credential-offer://</code> URI from Heka.
+        The wallet page receives it. This popup never loads the credential agent.
       </p>
 
       {/* URI input */}
@@ -61,7 +55,7 @@ export const ReceiveCredential: React.FC<Props> = ({ initialOfferUri, onReceived
             onChange={(e) => { setOfferUri(e.target.value); setState({ status: 'idle' }) }}
             placeholder="openid-credential-offer://?credential_offer_uri=..."
             rows={4}
-            disabled={state.status === 'receiving'}
+            disabled={false}
             spellCheck={false}
           />
         </div>
@@ -73,38 +67,17 @@ export const ReceiveCredential: React.FC<Props> = ({ initialOfferUri, onReceived
           <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
           <div>
             <p style={s.errTitle}>{state.error}</p>
-            {state.detail && <p style={s.errDetail}>{state.detail}</p>}
           </div>
         </div>
       )}
 
-      {state.status === 'success' && (
-        <div style={s.successBox}>
-          <div style={s.successIconWrap}>✅</div>
-          <div>
-            <p style={s.successTitle}>Credential received!</p>
-            <p style={s.successVct}>{state.vct}</p>
-          </div>
-        </div>
-      )}
-
-      {/* CTA button */}
       <button
         style={{ ...s.btn, ...(isDisabled ? s.btnDisabled : {}) }}
-        onClick={() => void handleReceive()}
+        onClick={handleReceive}
         disabled={isDisabled}
       >
-        {state.status === 'receiving' ? (
-          <>
-            <div style={s.btnSpinner} />
-            Receiving…
-          </>
-        ) : (
-          <>
-            <span style={{ fontSize: 15 }}>↓</span>
-            Receive into Wallet
-          </>
-        )}
+        <span style={{ fontSize: 15 }}>↓</span>
+        Open in wallet
       </button>
 
       {/* Privacy note */}
@@ -160,18 +133,7 @@ const s: Record<string, React.CSSProperties> = {
     background: 'rgba(220,38,38,0.07)', border: '1px solid rgba(220,38,38,0.22)',
     borderRadius: 10, padding: '10px 12px',
   },
-  errTitle:  { fontSize: 12, color: '#fca5a5', fontWeight: 700 },
-  errDetail: { fontSize: 11, color: '#f87171', marginTop: 3, lineHeight: 1.5 },
-
-  // Success
-  successBox: {
-    display: 'flex', gap: 12, alignItems: 'center',
-    background: 'rgba(34,197,94,0.07)', border: '1px solid rgba(34,197,94,0.22)',
-    borderRadius: 10, padding: '12px 14px',
-  },
-  successIconWrap: { fontSize: 22, flexShrink: 0 },
-  successTitle: { fontSize: 13, color: '#86efac', fontWeight: 700 },
-  successVct: { fontSize: 10, color: '#4ade80', fontFamily: 'monospace', marginTop: 2 },
+  errTitle: { fontSize: 12, color: '#fca5a5', fontWeight: 700 },
 
   // Button
   btn: {
@@ -187,11 +149,6 @@ const s: Record<string, React.CSSProperties> = {
   btnDisabled: {
     opacity: 0.35, cursor: 'not-allowed',
     boxShadow: 'none', background: 'rgba(255,255,255,0.1)',
-  },
-  btnSpinner: {
-    width: 14, height: 14, borderRadius: '50%',
-    border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff',
-    animation: 'spin 0.7s linear infinite',
   },
 
   // Privacy note

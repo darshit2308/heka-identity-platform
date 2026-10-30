@@ -2,18 +2,17 @@ import React, { useEffect, useState } from 'react'
 import { WalletStatus } from './components/WalletStatus'
 import { CredentialList } from './components/CredentialList'
 import { ReceiveCredential } from './components/ReceiveCredential'
-import { getHolderDid } from '../wallet/did'
-import { getOrCreateKeyPair } from '../wallet/key-store'
-import { getAllCredentials, type HeldCredential } from '../wallet/credential-store'
+import { walletPageUrl } from '../wallet/page-url'
+import { loadCredentialSummaries } from '../wallet/summary-cache'
+import { CREDENTIALS_SUMMARY_KEY, PENDING_OFFER_KEY } from '../wallet/storage-keys'
+import type { CredentialSummary } from '../wallet/summary-cache'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type AppView = 'wallet' | 'receive'
 
 export interface WalletState {
-  initialized: boolean
-  holderDid: string | null
-  credentials: HeldCredential[]
+  credentials: CredentialSummary[]
   loading: boolean
   error: string | null
 }
@@ -38,8 +37,6 @@ const HieroMark: React.FC<{ size?: number }> = ({ size = 26 }) => (
 export const App: React.FC = () => {
   const [view, setView] = useState<AppView>('wallet')
   const [wallet, setWallet] = useState<WalletState>({
-    initialized: false,
-    holderDid: null,
     credentials: [],
     loading: true,
     error: null,
@@ -52,9 +49,8 @@ export const App: React.FC = () => {
   const loadWalletState = async () => {
     try {
       setWallet((prev) => ({ ...prev, loading: true, error: null }))
-      await getOrCreateKeyPair()
-      const [holderDid, credentials] = await Promise.all([getHolderDid(), getAllCredentials()])
-      setWallet({ initialized: true, holderDid, credentials, loading: false, error: null })
+      const credentials = await loadCredentialSummaries()
+      setWallet({ credentials, loading: false, error: null })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       setWallet((prev) => ({ ...prev, loading: false, error: message }))
@@ -63,14 +59,20 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     void loadWalletState()
-    chrome.storage.local.get('pendingOfferUri', (data) => {
-      if (data.pendingOfferUri) {
-        setPendingOfferUri(data.pendingOfferUri)
+    chrome.storage.local.get(PENDING_OFFER_KEY, (data) => {
+      const pending = data[PENDING_OFFER_KEY]
+      if (typeof pending === 'string' && pending.length > 0) {
+        setPendingOfferUri(pending)
         setView('receive')
-        void chrome.storage.local.remove('pendingOfferUri')
+        void chrome.storage.local.remove(PENDING_OFFER_KEY)
       }
     })
+    const onChanged: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
+      if (area === 'local' && changes[CREDENTIALS_SUMMARY_KEY]) void loadWalletState()
+    }
+    chrome.storage.onChanged.addListener(onChanged)
     if (urlOfferUri) setView('receive')
+    return () => chrome.storage.onChanged.removeListener(onChanged)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -90,7 +92,7 @@ export const App: React.FC = () => {
         <button
           type="button"
           style={s.tab}
-          onClick={() => window.open(chrome.runtime.getURL('wallet.html'))}
+          onClick={() => window.open(walletPageUrl())}
         >
           Open wallet
         </button>
@@ -117,7 +119,7 @@ export const App: React.FC = () => {
               <div style={s.spinnerInner} />
             </div>
             <p style={s.loadTitle}>Initialising wallet</p>
-            <p style={s.loadSub}>Generating keys and loading credentials…</p>
+            <p style={s.loadSub}>Loading credentials…</p>
           </div>
         ) : wallet.error ? (
           <div style={s.errCard}>
@@ -130,7 +132,7 @@ export const App: React.FC = () => {
           <>
             {view === 'wallet' && (
               <>
-                <WalletStatus holderDid={wallet.holderDid ?? ''} credentialCount={wallet.credentials.length} />
+                <WalletStatus credentialCount={wallet.credentials.length} />
                 <CredentialList credentials={wallet.credentials} />
               </>
             )}

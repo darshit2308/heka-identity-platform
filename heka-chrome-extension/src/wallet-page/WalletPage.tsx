@@ -1,37 +1,130 @@
+import type { DcqlCredentialsForRequest } from '@credo-ts/core'
 import React, { useEffect, useState } from 'react'
 
 import { getOrCreateAgent } from '../credo/lazy-agent'
+import { receiveCredentialOffer } from '../oid4vci/receive'
+import { handlePresentationRequest, submitPresentation, type ResolvedPresentationRequest } from '../oid4vp/present'
 
-type WalletStatus = { state: 'loading' } | { state: 'ready' } | { state: 'error'; message: string }
+type Status = { state: 'loading' } | { state: 'ready' } | { state: 'error'; message: string }
+type FlowStatus = { state: 'idle' } | { state: 'working' } | { state: 'done'; message: string } | { state: 'error'; message: string }
 
 export const WalletPage: React.FC = () => {
-  const [status, setStatus] = useState<WalletStatus>({ state: 'loading' })
-  const offer = new URLSearchParams(window.location.search).get('offer')
+  const params = new URLSearchParams(window.location.search)
+  const offer = params.get('offer')
+  const request = params.get('request')
+  const [status, setStatus] = useState<Status>({ state: 'loading' })
+  const [initMs, setInitMs] = useState<number | null>(null)
+  const [flow, setFlow] = useState<FlowStatus>({ state: 'idle' })
+  const [presentation, setPresentation] = useState<{
+    resolved: ResolvedPresentationRequest
+    selectedCredentials: DcqlCredentialsForRequest
+  } | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    void getOrCreateAgent()
-      .then(() => {
-        if (!cancelled) setStatus({ state: 'ready' })
-      })
-      .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : 'Wallet initialization failed'
-        if (!cancelled) setStatus({ state: 'error', message })
-      })
+    void (async () => {
+      try {
+        const started = performance.now()
+        await getOrCreateAgent()
+        if (cancelled) return
+        setInitMs(Math.round(performance.now() - started))
+        setStatus({ state: 'ready' })
+        if (offer) await receiveOffer(offer, setFlow)
+        if (request) await resolvePresentation(request, setFlow, setPresentation)
+      } catch (error: unknown) {
+        if (cancelled) return
+        setStatus({ state: 'error', message: error instanceof Error ? error.message : 'Wallet initialization failed' })
+      }
+    })()
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [offer, request])
+
+  const onSubmitPresentation = async () => {
+    if (!presentation) return
+    setFlow({ state: 'working' })
+    try {
+      const result = await submitPresentation(presentation.resolved, presentation.selectedCredentials)
+      setFlow({
+        state: 'done',
+        message: result.ok ? 'Presentation submitted.' : 'The verifier rejected the presentation.',
+      })
+    } catch (error: unknown) {
+      setFlow({ state: 'error', message: error instanceof Error ? error.message : 'Presentation failed' })
+    }
+  }
 
   return (
-    <main style={{ fontFamily: 'sans-serif', padding: 24, maxWidth: 640 }}>
-      <h1>Heka Wallet</h1>
-      <p id="credo-status">
+    <main style={page.main}>
+      <h1 style={page.title}>Heka Wallet</h1>
+      <p id="credo-status" data-init-ms={initMs ?? undefined} style={page.status}>
         {status.state === 'loading' && 'Starting the wallet…'}
         {status.state === 'ready' && 'Wallet ready'}
         {status.state === 'error' && status.message}
       </p>
-      {offer && <p>Credential offer received. Receiving it into this wallet is the next step.</p>}
+      {flow.state !== 'idle' && (
+        <p id="wallet-flow" style={page.flow}>
+          {flow.state === 'working' && 'Working…'}
+          {flow.state === 'done' && flow.message}
+          {flow.state === 'error' && flow.message}
+        </p>
+      )}
+      {presentation && flow.state !== 'done' && (
+        <button type="button" style={page.button} onClick={() => void onSubmitPresentation()} disabled={flow.state === 'working'}>
+          Present credential
+        </button>
+      )}
     </main>
   )
+}
+
+async function receiveOffer(offer: string, setFlow: (status: FlowStatus) => void): Promise<void> {
+  setFlow({ state: 'working' })
+  try {
+    const credentials = await receiveCredentialOffer(offer)
+    setFlow({ state: 'done', message: `Received ${credentials.length} credential${credentials.length === 1 ? '' : 's'}.` })
+  } catch (error: unknown) {
+    setFlow({ state: 'error', message: error instanceof Error ? error.message : 'Credential receive failed' })
+  }
+}
+
+async function resolvePresentation(
+  request: string,
+  setFlow: (status: FlowStatus) => void,
+  setPresentation: (value: { resolved: ResolvedPresentationRequest; selectedCredentials: DcqlCredentialsForRequest }) => void,
+): Promise<void> {
+  setFlow({ state: 'working' })
+  try {
+    const resolved = await handlePresentationRequest(request)
+    setPresentation(resolved)
+    setFlow({ state: 'idle' })
+  } catch (error: unknown) {
+    setFlow({ state: 'error', message: error instanceof Error ? error.message : 'Presentation request failed' })
+  }
+}
+
+const page: Record<string, React.CSSProperties> = {
+  main: {
+    fontFamily: "'Inter', system-ui, sans-serif",
+    padding: 32,
+    maxWidth: 640,
+    margin: '0 auto',
+    color: '#fff',
+    background: '#100b0e',
+    minHeight: '100vh',
+  },
+  title: { fontSize: 28, marginBottom: 8 },
+  status: { fontSize: 16, color: '#86efac' },
+  flow: { marginTop: 16, color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 },
+  button: {
+    marginTop: 16,
+    padding: '10px 18px',
+    border: 'none',
+    borderRadius: 999,
+    background: '#c6136a',
+    color: '#fff',
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
 }
