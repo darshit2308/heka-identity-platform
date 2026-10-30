@@ -1,12 +1,10 @@
 /**
  * Exact shape of the SD-JWT VC payload for a GithubContributorCredential.
  *
- * Claims are split into two groups based on the Week 2 disclosure policy:
- *
  * Always-present (non-selectively-disclosable):
  *   - `githubAccountId` — GitHub's immutable numeric account ID (string form)
  *   - `verifiedAt`      — ISO-8601 timestamp of the successful GPG verification
- *   - `walletId`        — Heka wallet ID derived from the account ID
+ *   - `walletId`        — Heka wallet id from the authenticated session
  *
  * Selectively disclosable (listed in CONTRIBUTOR_CREDENTIAL_SELECTIVE_CLAIMS):
  *   - `githubUsername`  — GitHub login at the time of verification
@@ -28,7 +26,7 @@ export interface ContributorCredentialPayload {
   /** ISO-8601 UTC timestamp at which GPG ownership was verified. */
   verifiedAt: string
 
-  /** Heka wallet ID linked to this contributor's GitHub account ID. */
+  /** Heka wallet id from the authenticated session. */
   walletId: string
 
   /** Verifiable Credential Type (required by SD-JWT VC format) */

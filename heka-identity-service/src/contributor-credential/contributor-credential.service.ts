@@ -1,22 +1,16 @@
+import { OpenId4VciCredentialFormatProfile } from '@credo-ts/openid4vc'
 import { EntityManager } from '@mikro-orm/core'
-import {
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-  OnApplicationBootstrap,
-} from '@nestjs/common'
+import { Inject, Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common'
 import { ConfigType } from '@nestjs/config'
 
 import { Agent, AGENT_TOKEN } from 'common/agent'
-import { Role } from 'common/auth'
+import { AuthInfo, Role } from 'common/auth'
 import { Wallet } from 'common/entities'
 import AgentConfig from 'config/agent'
-import { AuthServiceClient, type VerifiedContributorDto } from './auth-service.client'
-import { OpenId4VciCredentialFormatProfile } from '@credo-ts/openid4vc'
+import { ContributorOnboardingService, type VerifiedContributor } from 'contributor-onboarding'
 import { CredentialFormat } from 'openid4vc/issuer/dto/common/credential'
-import { OpenId4VcIssuerService } from 'openid4vc/issuer/issuer.service'
 import { UpdateIssuerSupportedCredentialsAction } from 'openid4vc/issuer/dto/update-issuer.dto'
+import { OpenId4VcIssuerService } from 'openid4vc/issuer/issuer.service'
 import { getWalletId } from 'utils/auth'
 import { withTenantAgent } from 'utils/multi-tenancy'
 import { CredentialIssuanceMetadata } from 'utils/oid4vc'
@@ -42,9 +36,9 @@ import { ContributorCredentialPayload } from './contributor-credential.types'
  *    already exists it is left untouched.
  *
  * 2. **Issuance** (`issueContributorCredential`):
- *    Given a verified `ContributorBinding`, builds an SD-JWT VC credential
- *    offer with the correct payload and disclosure frame (Week 2 policy) and
- *    returns the `openid-credential-offer://` URI.
+ *    Given the authenticated user's verified binding, builds an SD-JWT VC credential
+ *    offer with the correct payload and disclosure frame and returns the
+ *    `openid-credential-offer://` URI.
  *
  * **Implementation note on status lists:**
  * SD-JWT VCs do not support revocation (per the Credo and OID4VCI spec).
@@ -65,7 +59,7 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
     @Inject(AgentConfig.KEY) private readonly agentConfig: ConfigType<typeof AgentConfig>,
     private readonly em: EntityManager,
     private readonly openId4VcIssuerService: OpenId4VcIssuerService,
-    private readonly authServiceClient: AuthServiceClient,
+    private readonly contributorOnboardingService: ContributorOnboardingService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -103,23 +97,26 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
   /**
    * Creates an OID4VCI credential offer for a verified contributor.
    *
-   * The SD-JWT VC payload is built directly from the `ContributorBinding`
-   * record.  The disclosure frame marks `githubUsername` and `gpgFingerprint`
-   * as selectively disclosable, matching the Week 2 credential schema.
+   * The SD-JWT VC payload is built from the authenticated user's verified binding.
+   * The disclosure frame marks `githubUsername` and `gpgFingerprint` as selectively
+   * disclosable. `walletId` is the Heka wallet from the session, not a GitHub-derived id.
    *
    * This method calls `tenantAgent.openid4vc.issuer.createCredentialOffer()`
    * directly instead of going through `OpenId4VcIssuanceSessionService.offer()`
    * because SD-JWT VCs do not use status lists, and the session service
    * requires a full `AuthInfo.user` entity just to query the status list.
    *
-   * @param githubAccountId - The contributor's immutable GitHub numeric account ID.
    * @returns An `openid-credential-offer://` URI the wallet can scan.
    *
-   * @throws {NotFoundException} No verified binding found for the given account ID.
-   * @throws {ConflictException} The binding exists but GPG verification is not yet complete.
+   * @throws {NotFoundException} No binding for this user, or the issuer tenant is missing.
+   * @throws {ConflictException} GitHub is linked but GPG verification is not complete.
    */
-  public async issueContributorCredential(githubAccountId: string): Promise<string> {
-    const contributor = await this.authServiceClient.getVerifiedContributor(githubAccountId)
+  public async issueContributorCredential(authInfo: AuthInfo): Promise<string> {
+    const contributor = await this.contributorOnboardingService.getVerifiedBindingByUser(
+      authInfo.tenantId,
+      authInfo.userId,
+      authInfo.walletId,
+    )
 
     const tenantId = await this.resolveDemoTenantId()
     if (!tenantId) {
@@ -157,9 +154,7 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
       }
 
       if (!issuerDidUrl) {
-        throw new NotFoundException(
-          `Unable to resolve signing key for issuer DID: ${issuerDid}`,
-        )
+        throw new NotFoundException(`Unable to resolve signing key for issuer DID: ${issuerDid}`)
       }
 
       const payload = this.buildPayload(contributor)
@@ -198,7 +193,7 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
     }
 
     this.logger.log(
-      `Credential offer created for contributor @${contributor.githubUsername} (account ${githubAccountId})`,
+      `Credential offer created for contributor @${contributor.githubUsername} (account ${contributor.githubAccountId})`,
     )
 
     return credentialOffer
@@ -259,9 +254,7 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
 
       // Step 3: Ensure credential configuration is registered (idempotent add)
       const issuer = existingIssuers[0]
-      const alreadyRegistered = issuer.credentialsSupported?.some(
-        (c) => c.id === CONTRIBUTOR_CREDENTIAL_SUPPORTED_ID,
-      )
+      const alreadyRegistered = issuer.credentialsSupported?.some((c) => c.id === CONTRIBUTOR_CREDENTIAL_SUPPORTED_ID)
 
       if (alreadyRegistered) {
         this.logger.debug(
@@ -327,10 +320,10 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
 
   /**
    * Builds the SD-JWT VC payload from the contributor binding.
-   * All five Week 2 claims are included; the disclosure frame determines
+   * All five claims are included; the disclosure frame determines
    * which ones are selectively disclosable.
    */
-  private buildPayload(contributor: VerifiedContributorDto): ContributorCredentialPayload {
+  private buildPayload(contributor: VerifiedContributor): ContributorCredentialPayload {
     return {
       vct: CONTRIBUTOR_CREDENTIAL_VCT,
       githubAccountId: contributor.githubAccountId,
@@ -345,7 +338,6 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
    * Builds the disclosure frame that controls which claims are placed in
    * SD-JWT `_sd` digest groups (selectively disclosable).
    *
-   * Per the Week 2 disclosure policy:
    *   - `githubUsername` and `gpgFingerprint` are selectively disclosable.
    *   - `githubAccountId`, `verifiedAt`, and `walletId` are always revealed.
    */
