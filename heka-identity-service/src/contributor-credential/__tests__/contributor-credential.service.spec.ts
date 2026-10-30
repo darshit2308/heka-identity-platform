@@ -163,7 +163,7 @@ describe('ContributorCredentialService', () => {
       expect((callArgs.credentialsSupported[0] as any).vct).toBe(CONTRIBUTOR_CREDENTIAL_VCT)
     })
 
-    it('skips creation when credential config is already registered', async () => {
+    it('refreshes the credential config when it is already registered', async () => {
       vi.mocked(emForkMock.findOne).mockResolvedValue({ id: 'User_demo', tenantId: 'tenant-abc' } as any)
       vi.mocked(issuerServiceMock.find).mockResolvedValue([
         {
@@ -177,7 +177,12 @@ describe('ContributorCredentialService', () => {
       await service.onApplicationBootstrap()
 
       expect(issuerServiceMock.createIssuer).not.toHaveBeenCalled()
-      expect(issuerServiceMock.updateIssuerMetadata).not.toHaveBeenCalled()
+      expect(issuerServiceMock.updateIssuerMetadata).toHaveBeenCalledOnce()
+      const updated = vi.mocked(issuerServiceMock.updateIssuerMetadata).mock.calls[0][2]
+      expect(updated.credentialsSupported?.[0]).toMatchObject({
+        id: CONTRIBUTOR_CREDENTIAL_SUPPORTED_ID,
+        cryptographic_binding_methods_supported: ['jwk'],
+      })
     })
 
     it('logs a warning and does not throw when demo wallet is not found', async () => {

@@ -9,7 +9,10 @@ import { Wallet } from 'common/entities'
 import AgentConfig from 'config/agent'
 import { ContributorOnboardingService, type VerifiedContributor } from 'contributor-onboarding'
 import { CredentialFormat } from 'openid4vc/issuer/dto/common/credential'
-import { UpdateIssuerSupportedCredentialsAction } from 'openid4vc/issuer/dto/update-issuer.dto'
+import {
+  OpenId4VcIssuersUpdateMetadataDto,
+  UpdateIssuerSupportedCredentialsAction,
+} from 'openid4vc/issuer/dto/update-issuer.dto'
 import { OpenId4VcIssuerService } from 'openid4vc/issuer/issuer.service'
 import { getWalletId } from 'utils/auth'
 import { withTenantAgent } from 'utils/multi-tenancy'
@@ -32,8 +35,8 @@ import { ContributorCredentialPayload } from './contributor-credential.types'
  *    On every application startup, ensures the static global issuer (keyed by
  *    the demo-user's `did:hedera` DID) has the `GithubContributorCredentialSdJwt`
  *    credential configuration registered in its OID4VCI metadata.
- *    The operation is idempotent — if the issuer or the credential config
- *    already exists it is left untouched.
+ *    The operation is idempotent. An existing credential config is replaced so
+ *    its binding methods stay current.
  *
  * 2. **Issuance** (`issueContributorCredential`):
  *    Given the authenticated user's verified binding, builds an SD-JWT VC credential
@@ -257,8 +260,19 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
       const alreadyRegistered = issuer.credentialsSupported?.some((c) => c.id === CONTRIBUTOR_CREDENTIAL_SUPPORTED_ID)
 
       if (alreadyRegistered) {
-        this.logger.debug(
-          `${CONTRIBUTOR_CREDENTIAL_SUPPORTED_ID} already registered in issuer ${issuerDid} — skipping.`,
+        const retained = (issuer.credentialsSupported ?? []).filter(
+          (credential) => credential.id !== CONTRIBUTOR_CREDENTIAL_SUPPORTED_ID,
+        )
+        await this.openId4VcIssuerService.updateIssuerMetadata(tenantAgent, issuerDid, {
+          action: UpdateIssuerSupportedCredentialsAction.Replace,
+          credentialsSupported: [
+            ...retained,
+            this.buildCredentialConfiguration(),
+          ] as OpenId4VcIssuersUpdateMetadataDto['credentialsSupported'],
+          display: issuer.display,
+        })
+        this.logger.log(
+          `${CONTRIBUTOR_CREDENTIAL_SUPPORTED_ID} credential configuration updated for issuer ${issuerDid}`,
         )
         return
       }
@@ -295,6 +309,7 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
       id: CONTRIBUTOR_CREDENTIAL_SUPPORTED_ID,
       format: CredentialFormat.SdJwt as CredentialFormat.SdJwt,
       vct: CONTRIBUTOR_CREDENTIAL_VCT,
+      cryptographic_binding_methods_supported: ['jwk'],
       claims: {
         githubAccountId: { mandatory: true },
         githubUsername: { mandatory: true },
