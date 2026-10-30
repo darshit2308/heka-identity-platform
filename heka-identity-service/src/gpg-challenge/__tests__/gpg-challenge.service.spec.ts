@@ -101,7 +101,16 @@ describe('GpgChallengeService', () => {
       em as unknown as EntityManager,
       httpService as unknown as HttpService,
       onboarding as unknown as ContributorOnboardingService,
-      { gpgKeyBaseUrl: 'https://github.com', requestTimeoutMs: 8000 },
+      {
+        clientId: undefined,
+        clientSecret: undefined,
+        callbackUrl: undefined,
+        authorizeUrl: 'https://github.com/login/oauth/authorize',
+        tokenUrl: 'https://github.com/login/oauth/access_token',
+        userApiUrl: 'https://api.github.com/user',
+        gpgKeyBaseUrl: 'https://github.com',
+        requestTimeoutMs: 8000,
+      },
     )
   })
 
