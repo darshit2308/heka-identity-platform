@@ -29,6 +29,7 @@ const githubConfig = {
   userApiUrl: 'https://api.github.com/user',
   gpgKeyBaseUrl: 'https://github.com',
   requestTimeoutMs: 8000,
+  statusToken: undefined,
 }
 
 function auth(overrides: Partial<AuthInfo> = {}): AuthInfo {
@@ -212,6 +213,7 @@ describe('ContributorOnboardingService', () => {
         expect.objectContaining({
           userId: 'user-1',
           tenantId: 'tenant-1',
+          walletId: 'User_user-1',
           status: LinkAttemptStatus.Pending,
         }),
         { status: LinkAttemptStatus.Consumed },
@@ -224,6 +226,7 @@ describe('ContributorOnboardingService', () => {
       em.findOneOrFail.mockResolvedValue({
         userId: 'user-1',
         tenantId: 'tenant-1',
+        walletId: 'User_user-1',
         codeVerifier: 'verifier',
       })
       http.post.mockReturnValue(of({ data: { access_token: 'gho_token' } }))
@@ -244,6 +247,7 @@ describe('ContributorOnboardingService', () => {
       em.findOneOrFail.mockResolvedValue({
         userId: 'user-1',
         tenantId: 'tenant-1',
+        walletId: 'User_user-1',
         codeVerifier: 'verifier',
       })
       http.post.mockReturnValue(of({ data: { access_token: 'gho_token' } }))
@@ -270,6 +274,7 @@ describe('ContributorOnboardingService', () => {
       em.findOneOrFail.mockResolvedValue({
         userId: 'user-1',
         tenantId: 'tenant-1',
+        walletId: 'User_user-1',
         codeVerifier: 'verifier',
       })
       http.post.mockReturnValue(of({ data: { access_token: 'gho_token' } }))
@@ -290,6 +295,7 @@ describe('ContributorOnboardingService', () => {
       em.findOneOrFail.mockResolvedValue({
         userId: 'user-1',
         tenantId: 'tenant-1',
+        walletId: 'User_user-1',
         codeVerifier: 'server-verifier',
         status: LinkAttemptStatus.Consumed,
       })

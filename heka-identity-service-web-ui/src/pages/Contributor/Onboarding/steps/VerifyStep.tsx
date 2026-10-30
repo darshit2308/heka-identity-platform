@@ -134,16 +134,10 @@ const VerifyStep: React.FC<Props> = ({
           <div className={cls.warningBox}>
             <span>⚠️</span>
             <div>
-              <p>Heka Web Wallet extension not detected.</p>
-              <a
-                href="https://chrome.google.com/webstore"
-                target="_blank"
-                rel="noopener noreferrer"
-                className={cls.link}
-              >
-                Install from Chrome Web Store
-              </a>
-              {' · '}
+              <p>
+                Heka Web Wallet extension not detected. Load it from this project&apos;s Chrome
+                extension build, then try again.
+              </p>
               <button
                 className={cls.textBtn}
                 onClick={() => void handleReceiveInWallet()}

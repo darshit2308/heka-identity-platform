@@ -349,7 +349,7 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
    */
   private async resolveDemoTenantId(): Promise<string | undefined> {
     const demoUserName = this.agentConfig.contributorIssuerDemoUser
-    const walletId = getWalletId({ role: Role.Admin, userId: demoUserName })
+    const walletId = getWalletId({ role: Role.User, userId: demoUserName })
     const em = this.em.fork()
     const wallet = await em.findOne(Wallet, { id: walletId })
     return wallet?.tenantId

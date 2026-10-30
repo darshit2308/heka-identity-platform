@@ -153,6 +153,7 @@ export class ContributorOnboardingService {
         stateHash,
         userId: authInfo.userId,
         tenantId: authInfo.tenantId,
+        walletId: authInfo.walletId,
         status: LinkAttemptStatus.Pending,
         expiresAt: { $gt: new Date() },
       },
@@ -166,6 +167,7 @@ export class ContributorOnboardingService {
       stateHash,
       userId: authInfo.userId,
       tenantId: authInfo.tenantId,
+      walletId: authInfo.walletId,
     })
 
     const accessToken = await this.exchangeCodeForToken(code, attempt.codeVerifier)
@@ -188,7 +190,7 @@ export class ContributorOnboardingService {
       binding.verifiedAt = null
     }
 
-    binding.walletId = authInfo.walletId
+    binding.walletId = attempt.walletId
     binding.githubAccountId = githubUser.id
     binding.githubUsername = githubUser.login
     this.persistAudit({
@@ -197,7 +199,7 @@ export class ContributorOnboardingService {
       tenantId: authInfo.tenantId,
       githubAccountId: githubUser.id,
       githubUsername: githubUser.login,
-      walletId: authInfo.walletId,
+      walletId: attempt.walletId,
       metadata: { source: 'github-link' },
     })
     await this.em.flush()

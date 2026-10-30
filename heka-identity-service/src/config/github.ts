@@ -13,4 +13,6 @@ export default registerAs('github', () => ({
   userApiUrl: process.env.GITHUB_USER_API_URL ?? 'https://api.github.com/user',
   gpgKeyBaseUrl: process.env.GITHUB_GPG_KEY_BASE_URL ?? 'https://github.com',
   requestTimeoutMs: Number(process.env.GITHUB_REQUEST_TIMEOUT_MS ?? 8_000),
+  /** Shared secret for GET /v2/gpg-challenge/status. The GitHub App sends it as a bearer token. */
+  statusToken: process.env.GITHUB_STATUS_TOKEN,
 }))

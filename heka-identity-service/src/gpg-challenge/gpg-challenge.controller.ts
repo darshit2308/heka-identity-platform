@@ -15,6 +15,7 @@ import {
 import { AuthInfo, JwtAuthGuard, ReqAuthInfo } from 'common/auth'
 
 import { GetStatusParamsDto, VerifySignatureDto } from './dto'
+import { GithubAppStatusGuard } from './github-app-status.guard'
 import { ContributorStatus, GpgChallengeService, VerificationResult } from './gpg-challenge.service'
 
 @ApiTags('GPG Challenge')
@@ -97,10 +98,15 @@ export class GpgChallengeController {
   @Version('2')
   @Get('status/:githubUsername')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(GithubAppStatusGuard)
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid GitHub App status token.' })
+  @ApiTooManyRequestsResponse({ description: 'Too many status requests from this address.' })
+  @ApiServiceUnavailableResponse({ description: 'Status checks are not configured, or GitHub is unreachable.' })
   @ApiOperation({
     summary: 'Get GPG verification status for a GitHub login',
     description:
-      'Used by the Heka GitHub App. Resolves the login to the current numeric GitHub account id and reads that binding. Always returns HTTP 200 for an unknown login; read `isVerified`.',
+      'Used by the Heka GitHub App. Requires the shared status token. Resolves the login to the current numeric GitHub account id, caches that lookup, and reads that binding. Always returns HTTP 200 for an unknown login; read `isVerified`.',
   })
   @ApiParam({ name: 'githubUsername', example: 'octocat' })
   @ApiOkResponse({ description: 'Status retrieved.' })

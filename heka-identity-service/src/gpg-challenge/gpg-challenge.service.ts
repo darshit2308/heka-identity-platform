@@ -64,6 +64,7 @@ interface CreateChallengeInput {
 @Injectable()
 export class GpgChallengeService {
   private readonly logger = new Logger(GpgChallengeService.name)
+  private readonly githubAccountIds = new Map<string, { id: string | null; expiresAt: number }>()
 
   public constructor(
     private readonly em: EntityManager,
@@ -155,19 +156,19 @@ export class GpgChallengeService {
     this.logger.log(`Challenge ${challengeId} consumed for @${challenge.githubUsername}`)
 
     const publicKeyArmored = await this.fetchGithubGpgKey(challenge.githubUsername)
-    const verification = await this.verifyPgpSignature(challenge.nonce, armoredMessage, publicKeyArmored)
+    let verification: { isValid: false } | { isValid: true; gpgFingerprint: string }
+    try {
+      verification = await this.verifyPgpSignature(challenge.nonce, armoredMessage, publicKeyArmored)
+    } catch (error: unknown) {
+      if (error instanceof BadRequestException) {
+        await this.recordRejectedProof(challenge, challengeId, 'Malformed signature')
+      }
+      throw error
+    }
 
     if (!verification.isValid) {
       this.logger.warn(`Signature verification failed for @${challenge.githubUsername}`)
-      await this.contributorOnboardingService.recordProofRejected({
-        userId: challenge.userId,
-        tenantId: challenge.tenantId,
-        githubAccountId: challenge.githubAccountId,
-        githubUsername: challenge.githubUsername,
-        walletId: challenge.walletId,
-        challengeId,
-        reason: 'Invalid signature',
-      })
+      await this.recordRejectedProof(challenge, challengeId, 'Invalid signature')
       return { verified: false }
     }
 
@@ -240,6 +241,12 @@ export class GpgChallengeService {
       return null
     }
 
+    const cacheKey = githubUsername.toLowerCase()
+    const cached = this.githubAccountIds.get(cacheKey)
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.id
+    }
+
     let account: { id?: number | string }
     try {
       const response = await firstValueFrom(
@@ -256,7 +263,7 @@ export class GpgChallengeService {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status
         if (status === 404) {
-          return null
+          return this.rememberGithubAccountId(cacheKey, null)
         }
         if (status === 403 || status === 429) {
           throw new HttpException(
@@ -270,9 +277,32 @@ export class GpgChallengeService {
     }
 
     if (account?.id === undefined || account.id === null || String(account.id).length === 0) {
-      return null
+      return this.rememberGithubAccountId(cacheKey, null)
     }
-    return String(account.id)
+    return this.rememberGithubAccountId(cacheKey, String(account.id))
+  }
+
+  private rememberGithubAccountId(cacheKey: string, id: string | null): string | null {
+    const now = Date.now()
+    if (this.githubAccountIds.size > 1_000) {
+      for (const [key, entry] of this.githubAccountIds) {
+        if (entry.expiresAt <= now) this.githubAccountIds.delete(key)
+      }
+    }
+    this.githubAccountIds.set(cacheKey, { id, expiresAt: now + (id ? 10 * 60_000 : 60_000) })
+    return id
+  }
+
+  private async recordRejectedProof(challenge: GpgChallenge, challengeId: string, reason: string): Promise<void> {
+    await this.contributorOnboardingService.recordProofRejected({
+      userId: challenge.userId,
+      tenantId: challenge.tenantId,
+      githubAccountId: challenge.githubAccountId,
+      githubUsername: challenge.githubUsername,
+      walletId: challenge.walletId,
+      challengeId,
+      reason,
+    })
   }
 
   private ownsChallenge(authInfo: AuthInfo, challenge: GpgChallenge): boolean {

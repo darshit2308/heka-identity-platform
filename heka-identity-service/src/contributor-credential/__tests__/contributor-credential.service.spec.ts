@@ -156,6 +156,7 @@ describe('ContributorCredentialService', () => {
 
       await service.onApplicationBootstrap()
 
+      expect(emForkMock.findOne).toHaveBeenCalledWith(expect.anything(), { id: 'User_demo' })
       expect(issuerServiceMock.createIssuer).toHaveBeenCalledOnce()
       const callArgs = vi.mocked(issuerServiceMock.createIssuer).mock.calls[0][1]
       expect(callArgs.credentialsSupported).toHaveLength(1)

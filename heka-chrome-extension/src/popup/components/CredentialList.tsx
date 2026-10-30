@@ -63,7 +63,12 @@ const CredentialCard: React.FC<{ credential: CredentialSummary }> = ({ credentia
       {/* Top accent bar */}
       <div style={s.cardAccent} />
 
-      <div style={s.cardHeader} onClick={() => setExpanded((p) => !p)}>
+      <button
+        type="button"
+        style={s.cardHeader}
+        onClick={() => setExpanded((p) => !p)}
+        aria-expanded={expanded}
+      >
         <div style={s.cardIconWrap}>
           <span style={{ fontSize: 18 }}>{icon}</span>
         </div>
@@ -73,12 +78,12 @@ const CredentialCard: React.FC<{ credential: CredentialSummary }> = ({ credentia
         </div>
         <div style={s.validBadge}>
           <span style={s.validDot} />
-          Valid
+          Stored
         </div>
         <span style={{ ...s.chevron, transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
           ›
         </span>
-      </div>
+      </button>
 
       {expanded && (
         <div style={s.cardBody}>
@@ -136,6 +141,8 @@ const s: Record<string, React.CSSProperties> = {
   cardHeader: {
     display: 'flex', alignItems: 'center', gap: 10,
     padding: '10px 12px', cursor: 'pointer',
+    width: '100%', border: 'none', background: 'transparent',
+    color: 'inherit', font: 'inherit', textAlign: 'left',
     transition: 'background 0.15s',
   },
   cardIconWrap: {

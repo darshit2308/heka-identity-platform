@@ -2025,10 +2025,11 @@ paths:
   /v2/gpg-challenge/status/{githubUsername}:
     get:
       description: Returns whether the contributor has completed GPG ownership
-        verification. Used by the Heka GitHub App to post an appropriate
-        check-run result. The login is resolved to the current numeric GitHub
-        account id, and status is read from that binding. Always returns HTTP
-        200 for an unknown login; check the `isVerified` field for the outcome.
+        verification. Used by the Heka GitHub App, which authenticates with
+        the shared status token. The login is resolved to the current numeric
+        GitHub account id (cached), and status is read from that binding.
+        Always returns HTTP 200 for an unknown login; check the `isVerified`
+        field for the outcome.
       operationId: GpgChallengeController_getStatus
       parameters:
         - name: githubUsername
@@ -2055,6 +2056,14 @@ paths:
                     value:
                       isVerified: false
                       githubUsername: darshit2308
+        "401":
+          description: Missing or invalid GitHub App status token.
+        "429":
+          description: Too many status requests from this address.
+        "503":
+          description: Status checks are not configured, or GitHub is unreachable.
+      security:
+        - bearer: []
       summary: Get the GPG verification status for a GitHub contributor
       tags: *a52
   /v2/contributor-onboarding/github/link/start:

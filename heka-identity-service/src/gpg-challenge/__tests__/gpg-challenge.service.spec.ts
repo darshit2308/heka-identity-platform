@@ -112,6 +112,7 @@ describe('GpgChallengeService', () => {
         userApiUrl: 'https://api.github.com/user',
         gpgKeyBaseUrl: 'https://github.com',
         requestTimeoutMs: 8000,
+        statusToken: undefined,
       },
     )
   })
@@ -248,6 +249,9 @@ describe('GpgChallengeService', () => {
       await expect(service.verifySignature(auth(), 'id', 'this is not a pgp message')).rejects.toThrow(
         /could not be parsed as a PGP cleartext-signed message/,
       )
+      expect(onboarding.recordProofRejected).toHaveBeenCalledWith(
+        expect.objectContaining({ challengeId: 'id', reason: 'Malformed signature' }),
+      )
     })
 
     it('stores the fingerprint of the key that signed the nonce', async () => {
@@ -353,6 +357,16 @@ describe('GpgChallengeService', () => {
         'https://api.github.com/users/renamed',
         expect.objectContaining({ headers: expect.objectContaining({ 'User-Agent': 'heka-identity-service' }) }),
       )
+    })
+
+    it('reuses the cached GitHub account id', async () => {
+      httpService.get.mockReturnValue(of({ data: { id: 4115704, login: 'renamed' } }))
+      onboarding.findBindingByGithubAccountId.mockResolvedValue(null)
+
+      await service.getContributorStatus('renamed')
+      await service.getContributorStatus('renamed')
+
+      expect(httpService.get).toHaveBeenCalledOnce()
     })
   })
 })

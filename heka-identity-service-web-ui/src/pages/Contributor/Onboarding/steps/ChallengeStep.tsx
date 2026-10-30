@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 
 import { requestContributorGpgChallenge } from '@/entities/User/model/services/requestContributorGpgChallenge';
 import { useAppDispatch } from '@/shared/lib/hooks/useAppDispatch';
@@ -15,17 +15,21 @@ const ChallengeStep: React.FC<Props> = ({
   onChallengeReady,
 }) => {
   const dispatch = useAppDispatch();
+  const [isRequesting, setIsRequesting] = useState(false);
 
   const handleRequestChallenge = useCallback(async () => {
-    if (!githubUsername) return;
+    if (!githubUsername || isRequesting) return;
 
+    setIsRequesting(true);
     try {
       await dispatch(requestContributorGpgChallenge()).unwrap();
       onChallengeReady();
     } catch {
       // Error is handled in the Redux slice and displayed by the parent
+    } finally {
+      setIsRequesting(false);
     }
-  }, [dispatch, githubUsername, onChallengeReady]);
+  }, [dispatch, githubUsername, isRequesting, onChallengeReady]);
 
   return (
     <div className={cls.step}>
@@ -66,9 +70,9 @@ const ChallengeStep: React.FC<Props> = ({
         id="generate-challenge-btn"
         className={cls.primaryBtn}
         onClick={() => void handleRequestChallenge()}
-        disabled={!githubUsername}
+        disabled={!githubUsername || isRequesting}
       >
-        Generate Challenge
+        {isRequesting ? 'Generating…' : 'Generate Challenge'}
       </button>
     </div>
   );

@@ -65,17 +65,9 @@ const ContributorHub: React.FC = () => {
         <div>
           <p className={cls.walletTitle}>Install the Heka Web Wallet</p>
           <p className={cls.walletText}>
-            For the best experience, install the{' '}
-            <a
-              href="https://chrome.google.com/webstore"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cls.link}
-            >
-              Heka Web Wallet Chrome extension
-            </a>{' '}
-            before starting. Receiving the credential into your wallet is optional — you can
-            complete onboarding without it.
+            Load the Heka Web Wallet from this project&apos;s Chrome extension build before starting.
+            It is not published on the Chrome Web Store. Receiving the credential into your wallet is
+            optional — you can complete onboarding without it.
           </p>
         </div>
       </div>

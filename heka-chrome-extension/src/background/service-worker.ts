@@ -13,9 +13,12 @@ export type ExtensionResponse =
   | { type: 'PONG'; version: string }
   | { type: 'OFFER_ACKNOWLEDGED' }
   | { type: 'STATUS'; initialized: boolean; credentialCount: number }
+  | { type: 'ERROR'; message: string }
 
-chrome.runtime.onInstalled.addListener(() => {
-  void chrome.storage.local.remove([PENDING_OFFER_KEY, RECEIVE_STATUS_KEY])
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === 'install') {
+    void chrome.storage.local.remove([PENDING_OFFER_KEY, RECEIVE_STATUS_KEY])
+  }
   void updateBadge()
 })
 
@@ -25,53 +28,48 @@ chrome.runtime.onMessage.addListener(
     _sender: chrome.runtime.MessageSender,
     sendResponse: (response: ExtensionResponse) => void,
   ): boolean => {
-    void handleMessage(message, sendResponse)
+    void handleMessage(message)
+      .then((response) => sendResponse(response))
+      .catch((error: unknown) => {
+        const text = error instanceof Error ? error.message : 'Wallet request failed'
+        sendResponse({ type: 'ERROR', message: text })
+      })
     return true
   },
 )
 
-async function handleMessage(
-  message: ExtensionMessage,
-  sendResponse: (response: ExtensionResponse) => void,
-): Promise<void> {
+async function handleMessage(message: ExtensionMessage): Promise<ExtensionResponse> {
   switch (message.type) {
-    case 'PING': {
-      sendResponse({ type: 'PONG', version: chrome.runtime.getManifest().version })
-      break
-    }
+    case 'PING':
+      return { type: 'PONG', version: chrome.runtime.getManifest().version }
 
     case 'RECEIVE_OFFER': {
       const offerUri = message.offerUri
       if (typeof offerUri === 'string' && offerUri.startsWith('openid-credential-offer:')) {
         await receiveOfferInExtension(offerUri)
       }
-      sendResponse({ type: 'OFFER_ACKNOWLEDGED' })
-      break
+      return { type: 'OFFER_ACKNOWLEDGED' }
     }
 
     case 'WALLET_TASK_DONE': {
       if (await chrome.offscreen.hasDocument()) await chrome.offscreen.closeDocument()
-      sendResponse({ type: 'OFFER_ACKNOWLEDGED' })
-      break
+      return { type: 'OFFER_ACKNOWLEDGED' }
     }
 
     case 'REFRESH_BADGE': {
       await updateBadge()
-      sendResponse({ type: 'OFFER_ACKNOWLEDGED' })
-      break
+      return { type: 'OFFER_ACKNOWLEDGED' }
     }
 
-    case 'GET_STATUS': {
-      sendResponse({
+    case 'GET_STATUS':
+      return {
         type: 'STATUS',
         initialized: true,
         credentialCount: await readCredentialCount(),
-      })
-      break
-    }
+      }
 
     default:
-      break
+      return { type: 'ERROR', message: 'Unknown wallet request' }
   }
 }
 

@@ -120,6 +120,8 @@ export default defineConfig({
       // The package export points at the Node build. The extension only needs
       // PublicKey and the browser client while resolving did:hedera.
       '@hashgraph/sdk': resolve(__dirname, 'node_modules/@hashgraph/sdk/lib/browser.js'),
+      // HCS checksums call this package, whose sha256 uses Node createHash.
+      '@hiero-did-sdk/crypto': resolve(__dirname, 'src/credo/browser-hedera-crypto.ts'),
     },
   },
 });
