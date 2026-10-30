@@ -91,6 +91,15 @@ async function handleMessage(
  * Updates the extension action badge to show the number of held credentials.
  * A badge count of 0 clears the badge text entirely.
  */
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes.credentialCount) return
+  const count = Number(changes.credentialCount.newValue ?? 0)
+  void chrome.action.setBadgeText({ text: count > 0 ? String(count) : '' })
+  if (count > 0) {
+    void chrome.action.setBadgeBackgroundColor({ color: '#22c55e' })
+  }
+})
+
 async function updateBadge(): Promise<void> {
   const count = await getCredentialCount()
   if (count === 0) {

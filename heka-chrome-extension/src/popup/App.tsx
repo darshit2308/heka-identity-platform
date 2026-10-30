@@ -87,6 +87,13 @@ export const App: React.FC = () => {
           </div>
         </div>
 
+        <button
+          type="button"
+          style={s.tab}
+          onClick={() => window.open(chrome.runtime.getURL('wallet.html'))}
+        >
+          Open wallet
+        </button>
         <div style={s.tabs}>
           {(['wallet', 'receive'] as AppView[]).map((tab) => (
             <button

@@ -58,6 +58,7 @@ export default defineConfig({
         // popup.html is at project root so Vite processes it correctly
         // and outputs it to dist/popup/index.html via entryFileNames override
         popup: resolve(__dirname, 'popup.html'),
+        wallet: resolve(__dirname, 'wallet.html'),
         'background/service-worker': resolve(
           __dirname,
           'src/background/service-worker.ts',
@@ -71,12 +72,14 @@ export default defineConfig({
         // Match the paths that manifest.json references exactly
         entryFileNames: (chunk) => {
           if (chunk.name === 'popup') return 'popup/index.js';
+          if (chunk.name === 'wallet') return 'wallet/index.js';
           return '[name].js';
         },
         chunkFileNames: 'chunks/[name]-[hash].js',
         assetFileNames: (asset) => {
           // CSS for the popup → popup/index.css
           if (asset.name === 'popup.css') return 'popup/index.css';
+          if (asset.name === 'wallet.css') return 'wallet/index.css';
           return 'assets/[name].[ext]';
         },
       },
@@ -88,6 +91,13 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
+      // @credo-ts/openid4vc imports express. The holder path never calls it.
+      express: resolve(__dirname, 'src/credo/express-stub.ts'),
+      // Published package points "module" at a file that is not in the tarball.
+      '@digitalcredentials/open-badges-context': resolve(
+        __dirname,
+        'node_modules/@digitalcredentials/open-badges-context/js/index.js',
+      ),
     },
   },
 });

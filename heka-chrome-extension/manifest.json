@@ -50,7 +50,7 @@
   "protocol_handlers": [
     {
       "protocol": "openid-credential-offer",
-      "uriTemplate": "/popup/index.html?offer=%s"
+      "uriTemplate": "/wallet.html?offer=%s"
     }
   ]
 }
