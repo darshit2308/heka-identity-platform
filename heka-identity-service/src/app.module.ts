@@ -27,6 +27,7 @@ import { GpgChallengeModule } from './gpg-challenge/gpg-challenge.module'
 import { HealthModule } from './health'
 import { IssuanceTemplateModule } from './issuance-template'
 import { OpenId4VcVerificationSessionModule } from './openid4vc/verification-sessions'
+import { PresentationSessionModule } from './presentation-session/presentation-session.module'
 import { ProofModule } from './proof'
 import { RevocationModule } from './revocation'
 import { SchemaModule } from './schema'
@@ -63,6 +64,7 @@ const _appRoot = typeof __dirname !== 'undefined' ? resolve(__dirname, '..') : p
     ContributorOnboardingModule,
     GpgChallengeModule,
     ContributorCredentialModule,
+    PresentationSessionModule,
     OCAModule,
     DemoModule,
     EventEmitterModule.forRoot(),

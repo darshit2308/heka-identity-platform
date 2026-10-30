@@ -24,6 +24,7 @@ export enum ROUTES {
   // ── Contributor onboarding ─────────────────────────────────────────────
   CONTRIBUTOR = '/contributor',
   CONTRIBUTOR_ONBOARDING = '/contributor/onboarding',
+  PRESENTATION_VERIFY = '/contributor/verify/:sessionId',
 }
 
 export default ROUTES;
