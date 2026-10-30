@@ -1,11 +1,8 @@
-import React, { useMemo } from 'react';
-import { useSelector } from 'react-redux';
 import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom';
 
 import ROUTES from '@/app/routes/RoutePaths';
 import AuthenticatedLayout from '@/components/Layout/AuthenticatedLayout';
 import UnauthenticatedLayout from '@/components/Layout/UnauthenticatedLayout';
-import { getUserIsSignedIn } from '@/entities/User/model/selectors/userSelector';
 import AgeVerificationDemo from '@/pages/AgeVerificationDemo/AgeVerificationDemo';
 import ContributorHub from '@/pages/Contributor/ContributorHub';
 import ContributorOnboarding from '@/pages/Contributor/Onboarding/ContributorOnboarding';
@@ -17,10 +14,12 @@ import IssueCredential from '@/pages/IssueCredential/IssueCredential';
 import { IssueFromTemplate } from '@/pages/IssueCredential/IssueFromTemplate/IssueFromTemplate';
 import Profile from '@/pages/Profile/Profile';
 import SignInView from '@/pages/SignIn/SignIn';
-import SignUpView from '@/pages/SignUp/SignUp';
 import { VerificationFromTemplate } from '@/pages/VerifyCredential/VerificationFromTemplate/VerificationFromTemplate';
 import VerificationRequest from '@/pages/VerifyCredential/VerificationRequest/VerificationRequest';
 import VerifyCredential from '@/pages/VerifyCredential/VerifyCredential';
+import { useAuthSession } from '@/shared/auth/session';
+import { routerFuture } from '@/shared/config/router';
+import { LoaderView } from '@/shared/ui/Loader/Loader';
 
 const AuthenticatedRoutes = () => (
   <Routes>
@@ -104,23 +103,26 @@ const UnauthenticatedRoutes = () => (
         path={ROUTES.SIGN_IN}
         element={<SignInView />}
       />
-      <Route
-        path={ROUTES.SIGN_UP}
-        element={<SignUpView />}
-      />
     </Route>
   </Routes>
 );
 
 const Router = () => {
-  const isSignedIn = useSelector(getUserIsSignedIn);
+  // Read sign-in from the OIDC session itself: its Redux mirror is updated one commit later
+  // (in an effect), so on reload the signed-out routes would redirect a deep link to Home
+  const { isAuthenticated, isLoading } = useAuthSession();
 
-  const routes = useMemo(
-    () => (isSignedIn ? <AuthenticatedRoutes /> : <UnauthenticatedRoutes />),
-    [isSignedIn],
+  // While the OIDC client restores the session or processes the redirect callback,
+  // render neither route set: otherwise the app would flash the signed-out screens.
+  if (isLoading) {
+    return <LoaderView />;
+  }
+
+  return (
+    <BrowserRouter future={routerFuture}>
+      {isAuthenticated ? <AuthenticatedRoutes /> : <UnauthenticatedRoutes />}
+    </BrowserRouter>
   );
-
-  return <BrowserRouter>{routes}</BrowserRouter>;
 };
 
 export default Router;

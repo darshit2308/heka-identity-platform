@@ -16,7 +16,7 @@ The platform is composed of the following components:
 - **[Heka Wallet](./heka-wallet)** (Verifiable Credentials Holder): Cross-platform mobile application (built with React Native) for end users to receive, store, and present verifiable credentials.
 - **[Identity Service](./heka-identity-service)**: Backend service (built with NestJS) that primarily acts as a Verifiable Credentials Issuer and Verifier, while also supporting Holder capabilities for cloud (custodial) wallet scenarios.
 - **[Identity Service Web UI](./heka-identity-service-web-ui)**: Web UI application for Identity Service — allows managing schemas, credential templates, and issuance / verification flows.
-- **[Auth Service](./heka-auth-service)**: Authentication service used by the Identity Service for tenant and user authentication.
+- **OIDC provider** (Keycloak, Auth0 or any standards-compliant provider, not part of the repository): authenticates Identity Service users and tenants; the ready-made recipes live in [heka-sso-service/keycloak](./heka-sso-service/keycloak) and [heka-sso-service/auth0](./heka-sso-service/auth0).
 
 The implementation is based on the **DSR SSI Toolkit** and leverages well-established open-source frameworks: **OWF Credo** and **OWF Bifold**.
 
@@ -26,13 +26,13 @@ The implementation is based on the **DSR SSI Toolkit** and leverages well-establ
 flowchart LR
     Wallet[Heka Wallet<br/>Holder]
     WebUI[Identity Service Web UI<br/>Issuer / Verifier Client]
-    Auth[Auth Service]
+    OIDC[OIDC provider<br/>Keycloak / Auth0 / …]
     IS[Identity Service<br/>Issuer / Verifier Wallet]
     Hedera[(Hiero / Hedera Ledger)]
 
-    WebUI -->|login / register| Auth
-    WebUI -->|REST API + JWT| IS
-    Auth -.->|issues JWTs trusted by| IS
+    WebUI -->|login / register<br/>Authorization Code + PKCE| OIDC
+    WebUI -->|REST API + access token| IS
+    OIDC -.->|JWKS: tokens verified by| IS
     Wallet <-->|OID4VC / DIDComm| IS
     IS -->|DIDs / AnonCreds Resources| Hedera
     Wallet -->|DIDs and AnonCreds Resources resolution| Hedera
@@ -42,9 +42,49 @@ flowchart LR
 
 Each component is set up and run independently. For specific setup and configuration steps, please refer to specific README files in component folders.
 
+To run the web-facing components together, use the Compose project at the repository root. The `<profile>` below is the identity provider: `keycloak` (started by Compose) or `auth0` (your own tenant, see [heka-sso-service/auth0](./heka-sso-service/auth0)).
+
+1. Start Docker Desktop (or another Docker engine with Compose v2).
+2. Only when a phone wallet or Auth0 has to reach the services from outside your machine: start an https tunnel (e.g. ngrok) to the identity service's OID4VC port 3003, which serves credential offers, presentation requests and logos, and to `heka-sso-service` (port 3005) when Auth0 brokers to it. DIDComm flows with a remote wallet also need ports 3001 and 3002; a free ngrok account exposes one port, see the nginx recipe in [local-config-for-heka-wallet-integration.md](./heka-identity-service/docs/local-config-for-heka-wallet-integration.md). For a desktop-only run skip this step.
+3. Copy `.env.example` to `.env` and set the variables: the tunnel URLs from step 2 (leave them empty without a tunnel) and the identity provider block for the chosen profile.
+4. Copy the OIDC client configuration of the SSO service: `cp heka-sso-service/env/oidc-clients.example.json heka-sso-service/env/oidc-clients.json`.
+5. Create or adjust the verifiable credentials the SSO service requests at login in `heka-sso-service/env/oidc-login-configs.json`. The committed file asks for the given name, family name and the age-over-18 flag from an SD-JWT mDL credential, the same credential `heka-sso-service/env/.env.example` configures for a host-run service:
+
+   ```json
+   [
+     {
+       "id": "default",
+       "verificationTemplate": "default",
+       "dcqlQuery": {
+         "credentials": [
+           {
+             "id": "mdl",
+             "format": "dc+sd-jwt",
+             "meta": { "vct_values": ["mDL"] },
+             "claims": [{ "path": ["given_name"] }, { "path": ["family_name"] }, { "path": ["age_over_18"] }]
+           }
+         ]
+       },
+       "claimMapping": {
+         "mdl.given_name": "given_name",
+         "mdl.family_name": "family_name",
+         "mdl.age_over_18": "age_over_18"
+       },
+       "subStrategy": "derived",
+       "issuerAllowlist": []
+     }
+   ]
+   ```
+
+   `dcqlQuery` is the DCQL query the SSO service sends to the Identity Service when it creates the verification session; `claimMapping` maps the disclosed claims (`<credential query id>.<claim path>`) to OIDC claims; `subStrategy` selects how the OIDC `sub` is derived; `issuerAllowlist` lists the trusted credential issuers. The entry's `id` is referenced by `loginConfigId` in `oidc-clients.json`. See the [SSO service README](./heka-sso-service/README.md#oidc-provider) for the full format.
+6. Run `docker compose --profile <profile> up -d --build`.
+7. Prepare the SSO verifier wallet and record its DID in `.env`: `./docker/prepare-sso-verifier.ps1 -Provider <profile>` on Windows, `bash docker/prepare-sso-verifier.sh --provider <profile>` on Linux / macOS.
+8. Restart the SSO service with the new DID: `docker compose --profile <profile> up -d heka-sso-service`.
+9. Optional, for the public demo pages of the identity web UI: run `yarn install && yarn prepare-demo-user` in `heka-identity-service-web-ui` (it talks to the identity service on `localhost:3000` and uses the demo-token broker the stack enables), copy the printed DID into `IDENTITY_WEBUI_DEMO_USER_DID` in `.env`, then rebuild the UI image: `docker compose --profile <profile> up -d --build heka-identity-web-ui`. The script also writes the DID into that package's own `.env`, which only a host-run `yarn start` uses.
+
 The recommended approach for exploring the platform is the following:
 - Set up and get familiar with core functional components - [Identity Service](./heka-identity-service) and [Heka Wallet (Mobile application)](./heka-wallet)
-- Explore the [Identity Service Web UI](./heka-identity-service-web-ui) and [Auth Service](./heka-auth-service) components. These are more general-purpose applications that still represent a crucial piece for complete experience and testing capabilities
+- Explore the [Identity Service Web UI](./heka-identity-service-web-ui) together with an OIDC provider set up from the [Keycloak](./heka-sso-service/keycloak) or [Auth0](./heka-sso-service/auth0) recipe. The Web UI is a more general-purpose application that still represents a crucial piece for complete experience and testing capabilities
 - Once you get familiar with the baseline functionality of a platform, feel free to check out the [demo folder](./demo) to explore various decentralized identity use cases implemented with Heka Identity Platform
 
 ## Supported Identity Standards

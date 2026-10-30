@@ -6,10 +6,19 @@ import { INestApplication } from '@nestjs/common'
 import request, { WSChain } from 'superwstest'
 import { WebSocket } from 'ws'
 
+import { WEBSOCKET_BEARER_PROTOCOL } from 'src/common/auth'
+import { TOKEN_EXPIRED_CLOSE_CODE, UNAUTHORIZED_CLOSE_CODE } from 'src/common/notification/notification.gateway'
 import { uuid } from 'src/utils/misc'
 import { sleep } from 'src/utils/timers'
 
-import { initializeMikroOrm, signJwt, startTestApp } from './helpers'
+import {
+  initializeMikroOrm,
+  signJwt,
+  startTestApp,
+  testOidcAudience,
+  testOidcIssuer,
+  waitForNotificationSocket,
+} from './helpers'
 
 describe('E2E WebSocket authentication', () => {
   let ormSchemaGenerator: SchemaGenerator
@@ -54,11 +63,10 @@ describe('E2E WebSocket authentication', () => {
         type: 'access',
         roles: ['Admin'],
       },
-      'test',
       {
         subject: uuid(),
-        issuer: 'Heka',
-        audience: 'Heka Identity Service',
+        issuer: testOidcIssuer,
+        audience: testOidcAudience,
         expiresIn: '1w',
       },
     )
@@ -84,11 +92,10 @@ describe('E2E WebSocket authentication', () => {
         roles: ['OrgAdmin'],
         org_id: uuid(),
       },
-      'test',
       {
         subject: uuid(),
-        issuer: 'Heka',
-        audience: 'Heka Identity Service',
+        issuer: testOidcIssuer,
+        audience: testOidcAudience,
         expiresIn: '1w',
       },
     )
@@ -114,11 +121,10 @@ describe('E2E WebSocket authentication', () => {
         roles: ['OrgManager'],
         org_id: uuid(),
       },
-      'test',
       {
         subject: uuid(),
-        issuer: 'Heka',
-        audience: 'Heka Identity Service',
+        issuer: testOidcIssuer,
+        audience: testOidcAudience,
         expiresIn: '1w',
       },
     )
@@ -144,11 +150,10 @@ describe('E2E WebSocket authentication', () => {
         roles: ['OrgMember'],
         org_id: uuid(),
       },
-      'test',
       {
         subject: uuid(),
-        issuer: 'Heka',
-        audience: 'Heka Identity Service',
+        issuer: testOidcIssuer,
+        audience: testOidcAudience,
         expiresIn: '1w',
       },
     )
@@ -174,11 +179,10 @@ describe('E2E WebSocket authentication', () => {
         roles: ['Issuer'],
         org_id: uuid(),
       },
-      'test',
       {
         subject: uuid(),
-        issuer: 'Heka',
-        audience: 'Heka Identity Service',
+        issuer: testOidcIssuer,
+        audience: testOidcAudience,
         expiresIn: '1w',
       },
     )
@@ -204,11 +208,10 @@ describe('E2E WebSocket authentication', () => {
         roles: ['Verifier'],
         org_id: uuid(),
       },
-      'test',
       {
         subject: uuid(),
-        issuer: 'Heka',
-        audience: 'Heka Identity Service',
+        issuer: testOidcIssuer,
+        audience: testOidcAudience,
         expiresIn: '1w',
       },
     )
@@ -233,11 +236,10 @@ describe('E2E WebSocket authentication', () => {
         type: 'access',
         roles: ['User'],
       },
-      'test',
       {
         subject: uuid(),
-        issuer: 'Heka',
-        audience: 'Heka Identity Service',
+        issuer: testOidcIssuer,
+        audience: testOidcAudience,
         expiresIn: '1w',
       },
     )
@@ -262,10 +264,9 @@ describe('E2E WebSocket authentication', () => {
         type: 'access',
         roles: ['User'],
       },
-      'test',
       {
         subject: uuid(),
-        audience: 'Heka Identity Service',
+        audience: testOidcAudience,
         expiresIn: '1w',
       },
     )
@@ -287,11 +288,10 @@ describe('E2E WebSocket authentication', () => {
         type: 'access',
         roles: ['User'],
       },
-      'test',
       {
         subject: uuid(),
         issuer: uuid(),
-        audience: 'Heka Identity Service',
+        audience: testOidcAudience,
         expiresIn: '1w',
       },
     )
@@ -313,10 +313,9 @@ describe('E2E WebSocket authentication', () => {
         type: 'access',
         roles: ['User'],
       },
-      'test',
       {
         subject: uuid(),
-        issuer: 'Heka',
+        issuer: testOidcIssuer,
         expiresIn: '1w',
       },
     )
@@ -338,10 +337,9 @@ describe('E2E WebSocket authentication', () => {
         type: 'access',
         roles: ['User'],
       },
-      'test',
       {
         subject: uuid(),
-        issuer: 'Heka',
+        issuer: testOidcIssuer,
         audience: 'Heka Mobile App',
         expiresIn: '1w',
       },
@@ -364,11 +362,10 @@ describe('E2E WebSocket authentication', () => {
         type: 'access',
         roles: ['User'],
       },
-      'test',
       {
         subject: uuid(),
-        issuer: 'Heka',
-        audience: 'Heka Identity Service',
+        issuer: testOidcIssuer,
+        audience: testOidcAudience,
         expiresIn: '1s',
       },
     )
@@ -393,11 +390,10 @@ describe('E2E WebSocket authentication', () => {
         type: 'access',
         roles: [],
       },
-      'test',
       {
         subject: uuid(),
-        issuer: 'Heka',
-        audience: 'Heka Identity Service',
+        issuer: testOidcIssuer,
+        audience: testOidcAudience,
         expiresIn: '1w',
       },
     )
@@ -419,11 +415,10 @@ describe('E2E WebSocket authentication', () => {
         type: 'access',
         roles: ['Admin', 'User'],
       },
-      'test',
       {
         subject: uuid(),
-        issuer: 'Heka',
-        audience: 'Heka Identity Service',
+        issuer: testOidcIssuer,
+        audience: testOidcAudience,
         expiresIn: '1w',
       },
     )
@@ -438,7 +433,8 @@ describe('E2E WebSocket authentication', () => {
     await userWebSocket.expectClosed(3000)
   })
 
-  test('rejects if bearer token contains org_id when must not', async () => {
+  // An organization in a User token is ignored, not rejected: a provider adds one for a member without an organization role
+  test('ignores org_id in a bearer token with User role', async () => {
     const userAuthToken = await signJwt(
       {
         name: 'John',
@@ -446,11 +442,10 @@ describe('E2E WebSocket authentication', () => {
         roles: ['User'],
         org_id: uuid(),
       },
-      'test',
       {
         subject: uuid(),
-        issuer: 'Heka',
-        audience: 'Heka Identity Service',
+        issuer: testOidcIssuer,
+        audience: testOidcAudience,
         expiresIn: '1w',
       },
     )
@@ -462,7 +457,7 @@ describe('E2E WebSocket authentication', () => {
 
     await userWebSocket
 
-    await userWebSocket.expectClosed(3000)
+    await waitForNotificationSocket(nestApp, userAuthToken)
   })
 
   test('rejects if bearer token does not contain org_id when must', async () => {
@@ -472,11 +467,10 @@ describe('E2E WebSocket authentication', () => {
         type: 'access',
         roles: ['Issuer'],
       },
-      'test',
       {
         subject: uuid(),
-        issuer: 'Heka',
-        audience: 'Heka Identity Service',
+        issuer: testOidcIssuer,
+        audience: testOidcAudience,
         expiresIn: '1w',
       },
     )
@@ -498,13 +492,13 @@ describe('E2E WebSocket authentication', () => {
         type: 'access',
         roles: ['User'],
       },
-      'wrong-secret',
       {
         subject: uuid(),
-        issuer: 'Heka',
-        audience: 'Heka Identity Service',
+        issuer: testOidcIssuer,
+        audience: testOidcAudience,
         expiresIn: '1w',
       },
+      { untrusted: true },
     )
 
     userWebSocket = request(app)
@@ -515,5 +509,54 @@ describe('E2E WebSocket authentication', () => {
     await userWebSocket
 
     await userWebSocket.expectClosed(3000)
+  })
+
+  // Browsers cannot set headers on a WebSocket, so the web UI sends the token as a subprotocol
+  describe('token in Sec-WebSocket-Protocol', () => {
+    const signUserToken = (expiresIn = '1w', options?: { untrusted: boolean }) =>
+      signJwt(
+        { name: 'John', type: 'access', roles: ['User'] },
+        { subject: uuid(), issuer: testOidcIssuer, audience: testOidcAudience, expiresIn },
+        options,
+      )
+
+    test('authenticates and echoes only the bearer marker as the protocol', async () => {
+      const userAuthToken = await signUserToken()
+
+      userWebSocket = request(app).ws('/notifications', [WEBSOCKET_BEARER_PROTOCOL, userAuthToken])
+      await userWebSocket
+
+      await waitForNotificationSocket(nestApp, userAuthToken)
+      await userWebSocket.exec((ws) => {
+        expect(ws.readyState).toBe(WebSocket.OPEN)
+        expect(ws.protocol).toBe(WEBSOCKET_BEARER_PROTOCOL)
+      })
+    })
+
+    test('rejects an invalid token', async () => {
+      const userAuthToken = await signUserToken('1w', { untrusted: true })
+
+      userWebSocket = request(app).ws('/notifications', [WEBSOCKET_BEARER_PROTOCOL, userAuthToken])
+      await userWebSocket
+
+      await userWebSocket.expectClosed(UNAUTHORIZED_CLOSE_CODE)
+    })
+
+    test('rejects the bearer marker without a token', async () => {
+      userWebSocket = request(app).ws('/notifications', [WEBSOCKET_BEARER_PROTOCOL])
+      await userWebSocket
+
+      await userWebSocket.expectClosed(UNAUTHORIZED_CLOSE_CODE)
+    })
+
+    test('closes the socket when the token expires', async () => {
+      const userAuthToken = await signUserToken('3s')
+
+      userWebSocket = request(app).ws('/notifications', [WEBSOCKET_BEARER_PROTOCOL, userAuthToken])
+      await userWebSocket
+
+      await waitForNotificationSocket(nestApp, userAuthToken)
+      await userWebSocket.expectClosed(TOKEN_EXPIRED_CLOSE_CODE, 'Token expired')
+    })
   })
 })

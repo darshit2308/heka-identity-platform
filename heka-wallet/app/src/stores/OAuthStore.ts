@@ -25,7 +25,12 @@ type AuthState = AuthorizeResult
 const logger = GlobalLogger.createContextLogger('OAuth')
 
 export class OAuthStore {
-  protected static keychainOptions: Keychain.SetOptions = getKeychainAccessOptions(WalletKeychainServices.OAuth)
+  // A fresh object per call: react-native-keychain writes default 'authenticationPrompt' values back onto the
+  // options it receives, and React Native freezes objects once they have been passed to a native module in dev
+  // builds, so reusing a single options object throws on the second call.
+  protected static get keychainOptions(): Keychain.SetOptions {
+    return getKeychainAccessOptions(WalletKeychainServices.OAuth)
+  }
 
   private _authState: AuthState | null = null
   private _userInfo: UserInfo | null = null
@@ -73,7 +78,7 @@ export class OAuthStore {
   async logIn(): Promise<void> {
     try {
       const state = await authorize(this._config.oauthConfig)
-      logger.debug('Logged in with auth state:', state)
+      logger.debug('Logged in, access token expires at:', state.accessTokenExpirationDate)
 
       await this.saveAuthState(state)
       await this.refreshUserInfo()
@@ -112,9 +117,11 @@ export class OAuthStore {
     try {
       // We don't want to prevent user from logging out due to token revocation failure (including being offline), so we're catching possible error here.
       // TODO: Add background retry for failed network requests to revoke token when device is back online
+      // Public clients have no secret, so the client is identified by client_id in the request body only.
+      // Sending HTTP Basic auth without a secret makes Keycloak reject the request as an invalid client.
       await revoke(this._config.oauthConfig, {
         tokenToRevoke: this._authState.accessToken,
-        includeBasicAuth: true,
+        includeBasicAuth: !!this._config.oauthConfig.clientSecret,
         sendClientId: true,
       }).catch((error) => logger.error('Access token revocation failed with error:', error))
 
@@ -137,7 +144,7 @@ export class OAuthStore {
     const keychainCredentials = await Keychain.getGenericPassword(OAuthStore.keychainOptions)
     if (keychainCredentials) {
       const authState = JSON.parse(keychainCredentials.password)
-      logger.debug('Loaded auth state:', authState)
+      logger.debug('Loaded auth state, access token expires at:', authState.accessTokenExpirationDate)
 
       runInAction(() => (this._authState = authState))
     }

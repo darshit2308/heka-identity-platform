@@ -3,7 +3,6 @@ export enum ROUTES {
   PROFILE = '/profile',
   GITHUB_CALLBACK = '/github/callback',
   SIGN_IN = '/sign-in',
-  SIGN_UP = '/sign-up',
   DEMO = '/demo',
   AGE_DEMO = '/age-demo',
   ISSUE_CREDENTIAL = '/issue-credential/*',

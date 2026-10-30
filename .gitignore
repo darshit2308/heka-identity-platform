@@ -62,3 +62,15 @@ node_modules/
 .config/
 
 .claude
+ai-project-kit
+
+# .env configuration (copy .env.example)
+**/.env
+
+# DepAssist
+**/.depassist/
+**/.depassist.json
+
+# DepAssist preset outputs (BoM, reports) - written by depassist run
+**/bom.cdx.json
+**/reports/

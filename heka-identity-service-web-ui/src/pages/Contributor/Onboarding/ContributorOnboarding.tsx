@@ -19,7 +19,7 @@ import { getContributorOnboardingStatus } from '@/entities/User/model/services/g
 import { OnboardingStepper } from '@/pages/Contributor/components/OnboardingStepper';
 import { $agencyApi } from '@/shared/api/config/api';
 import { agencyEndpoints } from '@/shared/api/config/endpoints';
-import { getAccessToken } from '@/shared/api/utils/token';
+import { getSessionAccessToken } from '@/shared/auth/sessionBridge';
 import { useAppDispatch } from '@/shared/lib/hooks/useAppDispatch';
 
 import ChallengeStep from './steps/ChallengeStep';
@@ -45,7 +45,7 @@ const ContributorOnboarding: React.FC = () => {
   // Load the current onboarding status on mount so we can fast-forward
   // the wizard if the user has already completed some steps.
   useEffect(() => {
-    if (getAccessToken()) {
+    if (getSessionAccessToken()) {
       void dispatch(getContributorOnboardingStatus());
     }
   }, [dispatch]);
