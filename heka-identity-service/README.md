@@ -11,7 +11,7 @@ The solution is designed as a multi-tenant system, meaning that a single instanc
 The service is configured via environment variables. The full reference (~30 variables across HTTP server, agent transports, persistence, JWT, ledger / DID methods, mDoc, logging, and health) lives in [Setup — Environment Variables](docs/setup.md#environment-variables). The most commonly customized are:
 
 - `JWT_SECRET`, `JWT_VERIFY_OPTIONS_ISSUER`, `JWT_VERIFY_OPTIONS_AUDIENCE` — must align with the [Heka Auth Service](../heka-auth-service/README.md#jwt-alignment-with-identity-service).
-- `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URI` — required for contributor onboarding through GitHub OAuth.
+- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_CALLBACK_URL` — required to link a GitHub account. The callback is the web UI route, `http://localhost:8000/github/callback` when the UI is started with `yarn start`. Linking does not create a session.
 - `HEDERA_OPERATOR_ID`, `HEDERA_OPERATOR_KEY`, `HEDERA_NETWORK` — see [Hedera Integration](docs/hedera.md).
 - `MIKRO_ORM_HOST`, `MIKRO_ORM_PORT`, `MIKRO_ORM_USER`, `MIKRO_ORM_PASSWORD`, `MIKRO_ORM_DATABASE` — application database connection.
 - `DID_METHODS` — comma-separated list of enabled DID methods (default `indy,key,hedera`).

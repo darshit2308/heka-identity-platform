@@ -299,7 +299,7 @@ API requests must carry a Bearer token signed with `JWT_SECRET`. The default val
 
 ### Contributor GitHub linking
 
-A signed-in Heka user links a GitHub account before the GPG challenge. Linking does not create a session. For local development, create a GitHub OAuth app and set its callback URL to the web UI route `http://localhost:3000/github/callback`. That page posts the code to `POST /v2/contributor-onboarding/github/link/callback`.
+A signed-in Heka user links a GitHub account before the GPG challenge. Linking does not create a session. `yarn start` in the web UI serves the app on port 8000, while this API stays on port 3000. Create a GitHub OAuth app and set its callback URL to `http://localhost:8000/github/callback`. That page posts the code to `POST /v2/contributor-onboarding/github/link/callback`.
 
 | Variable                    | Default                                    | Description                                                      |
 | --------------------------- | ------------------------------------------ | ---------------------------------------------------------------- |

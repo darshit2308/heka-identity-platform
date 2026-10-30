@@ -15,11 +15,9 @@ Askar is not used. Records go through `IndexedDbStorageService`, registered on `
 
 ## Runtime
 
-Chrome 156 ignores `--load-extension`, so the unpacked extension could not be started from the command line. The production `dist/` was served with the Manifest V3 extension content security policy:
+Chrome 156 ignores `--load-extension`. The unpacked `dist/` was loaded in Chromium 141, which still accepts that switch. `wallet.html` ran at `chrome-extension://<id>/wallet.html`. The status text was `Wallet ready`, and the page reported no errors.
 
-`script-src 'self' 'wasm-unsafe-eval'; object-src 'self'`
-
-`agent.initialize()` completed. A fresh IndexedDB is below Credo's storage version, so the agent is created with `autoUpdateStorageOnStartup: true`. Without that flag, initialization throws and asks for an update from storage version 0.1 to 0.5.
+A fresh IndexedDB is below Credo's storage version, so the agent is created with `autoUpdateStorageOnStartup: true`. Without that flag, initialization throws and asks for an update from storage version 0.1 to 0.5.
 
 | Measurement | Value |
 |---|---|
@@ -27,8 +25,9 @@ Chrome 156 ignores `--load-extension`, so the unpacked extension could not be st
 | `dist/popup/index.js` | 18.26 kB minified, 5.58 kB gzip |
 | `dist/background/service-worker.js` | 0.96 kB minified, 0.54 kB gzip |
 | `dist/content-scripts/heka-bridge.js` | 0.50 kB minified, 0.35 kB gzip |
-| `agent.initialize()`, empty IndexedDB | 66 ms |
-| `agent.initialize()`, existing storage | 34 ms |
+| `agent.initialize()` inside the loaded extension | 52 ms |
+| `agent.initialize()`, empty IndexedDB, same CSP over HTTP | 66 ms |
+| `agent.initialize()`, existing storage, same CSP over HTTP | 34 ms |
 | Credential receive | not measured; no issuer was running |
 
 The wallet entry is large because `@credo-ts/core` statically imports the modules the holder needs, so the dynamic import in `lazy-agent.ts` does not split them out of `wallet/index.js`. The popup bundle does not contain Credo.
