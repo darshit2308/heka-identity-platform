@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react'
 import { WalletStatus } from './components/WalletStatus'
 import { CredentialList } from './components/CredentialList'
 import { ReceiveCredential } from './components/ReceiveCredential'
-import { walletPageUrl } from '../wallet/page-url'
 import { loadCredentialSummaries } from '../wallet/summary-cache'
-import { CREDENTIALS_SUMMARY_KEY, PENDING_OFFER_KEY } from '../wallet/storage-keys'
+import { CREDENTIALS_SUMMARY_KEY, PENDING_OFFER_KEY, RECEIVE_STATUS_KEY } from '../wallet/storage-keys'
+import { ensurePendingReceive } from './receive-pending'
 import type { CredentialSummary } from '../wallet/summary-cache'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -42,13 +42,11 @@ export const App: React.FC = () => {
     error: null,
   })
 
-  const searchParams = new URLSearchParams(window.location.search)
-  const urlOfferUri = searchParams.get('offer')
-  const [pendingOfferUri, setPendingOfferUri] = useState<string | null>(urlOfferUri)
+  const [receiveMessage, setReceiveMessage] = useState<string | null>(null)
 
   const loadWalletState = async () => {
     try {
-      setWallet((prev) => ({ ...prev, loading: true, error: null }))
+      setWallet((prev) => ({ ...prev, loading: prev.credentials.length === 0, error: null }))
       const credentials = await loadCredentialSummaries()
       setWallet({ credentials, loading: false, error: null })
     } catch (err) {
@@ -59,19 +57,19 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     void loadWalletState()
-    chrome.storage.local.get(PENDING_OFFER_KEY, (data) => {
-      const pending = data[PENDING_OFFER_KEY]
-      if (typeof pending === 'string' && pending.length > 0) {
-        setPendingOfferUri(pending)
-        setView('receive')
-        void chrome.storage.local.remove(PENDING_OFFER_KEY)
-      }
+    ensurePendingReceive()
+    chrome.storage.local.get(RECEIVE_STATUS_KEY, (data) => {
+      const status = data[RECEIVE_STATUS_KEY] as { message?: string } | undefined
+      if (status?.message) setReceiveMessage(status.message)
     })
     const onChanged: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
-      if (area === 'local' && changes[CREDENTIALS_SUMMARY_KEY]) void loadWalletState()
+      if (area !== 'local') return
+      if (changes[CREDENTIALS_SUMMARY_KEY]) void loadWalletState()
+      if (typeof changes[PENDING_OFFER_KEY]?.newValue === 'string') ensurePendingReceive()
+      const next = changes[RECEIVE_STATUS_KEY]?.newValue as { message?: string } | undefined
+      if (next?.message) setReceiveMessage(next.message)
     }
     chrome.storage.onChanged.addListener(onChanged)
-    if (urlOfferUri) setView('receive')
     return () => chrome.storage.onChanged.removeListener(onChanged)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -89,13 +87,6 @@ export const App: React.FC = () => {
           </div>
         </div>
 
-        <button
-          type="button"
-          style={s.tab}
-          onClick={() => window.open(walletPageUrl())}
-        >
-          Open wallet
-        </button>
         <div style={s.tabs}>
           {(['wallet', 'receive'] as AppView[]).map((tab) => (
             <button
@@ -113,6 +104,7 @@ export const App: React.FC = () => {
       <div style={s.divider} />
 
       <main style={s.main}>
+        {receiveMessage && <p style={s.receiveNote}>{receiveMessage}</p>}
         {wallet.loading ? (
           <div style={s.center}>
             <div style={s.spinnerOuter}>
@@ -138,7 +130,6 @@ export const App: React.FC = () => {
             )}
             {view === 'receive' && (
               <ReceiveCredential
-                initialOfferUri={pendingOfferUri ?? undefined}
                 onReceived={() => { void loadWalletState(); setView('wallet') }}
               />
             )}
@@ -196,6 +187,10 @@ const s: Record<string, React.CSSProperties> = {
   tabBar: {
     position: 'absolute', bottom: 0, left: 8, right: 8, height: 2,
     borderRadius: 2, background: `linear-gradient(90deg, ${PINK}, ${RED})`,
+  },
+  receiveNote: {
+    marginBottom: 12, padding: '8px 10px', borderRadius: 10,
+    background: 'rgba(198,19,106,0.12)', color: '#fff', fontSize: 12, lineHeight: 1.5,
   },
   divider: {
     height: 1, position: 'relative', zIndex: 1,

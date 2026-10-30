@@ -7,20 +7,17 @@ export interface CredentialSummary {
   vct: string
   issuer: string
   issuedAt?: string
-  claims: Record<string, unknown>
 }
 
 export async function syncCredentialSummaryCache(agent: Agent): Promise<void> {
   const records = await agent.sdJwtVc.getAll()
   const summary: CredentialSummary[] = records.map((record) => {
-    const credential = record.firstCredential
-    const issuer = typeof credential.payload.iss === 'string' ? credential.payload.iss : ''
+    const issuer = record.firstCredential.payload.iss
     return {
       id: record.id,
       vct: record.getTags().vct,
-      issuer,
+      issuer: typeof issuer === 'string' ? issuer : '',
       issuedAt: record.createdAt ? record.createdAt.toISOString() : undefined,
-      claims: credential.prettyClaims,
     }
   })
 

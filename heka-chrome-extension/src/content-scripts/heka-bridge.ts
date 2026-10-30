@@ -20,22 +20,29 @@ const EXTENSION_MESSAGE_SOURCE = 'heka-extension-bridge'
 
 // ── Page → Extension ──────────────────────────────────────────────────────────
 
+function replyToPage(type: string, payload: unknown): void {
+  window.postMessage({ source: EXTENSION_MESSAGE_SOURCE, type, payload }, window.location.origin)
+}
+
 window.addEventListener('message', (event: MessageEvent) => {
-  // Reject messages from other origins or without the correct source tag
-  if (event.source !== window || event.data?.source !== HEKA_MESSAGE_SOURCE) {
+  // The page and this content script do not share a Window object, so event.source
+  // is not this script's window. Accept only this page's own messages.
+  if (event.origin !== window.location.origin || event.data?.source !== HEKA_MESSAGE_SOURCE) {
     return
   }
 
   const { type, payload } = event.data as { type: string; payload: unknown; source: string }
 
-  // Forward allowed message types to the service worker
-  if (type === 'PING' || type === 'RECEIVE_OFFER' || type === 'GET_STATUS') {
+  // Answer the install check here. Waiting for the service worker makes the page
+  // time out while that worker is still starting.
+  if (type === 'PING') {
+    replyToPage('PING_RESPONSE', { type: 'PONG', version: '0.1.0' })
+    return
+  }
+
+  if (type === 'RECEIVE_OFFER' || type === 'GET_STATUS') {
     chrome.runtime.sendMessage({ type, ...((payload as object | null) ?? {}) }, (response) => {
-      // Forward the response back to the page
-      window.postMessage(
-        { source: EXTENSION_MESSAGE_SOURCE, type: `${type}_RESPONSE`, payload: response },
-        '*',
-      )
+      replyToPage(`${type}_RESPONSE`, response)
     })
   }
 })

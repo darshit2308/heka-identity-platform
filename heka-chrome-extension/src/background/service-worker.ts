@@ -1,10 +1,11 @@
-import { CREDENTIAL_COUNT_KEY, PENDING_OFFER_KEY } from '../wallet/storage-keys'
+import { CREDENTIAL_COUNT_KEY, PENDING_OFFER_KEY, RECEIVE_STATUS_KEY } from '../wallet/storage-keys'
 
 // ── Types for cross-context messages ─────────────────────────────────────────
 
 export type ExtensionMessage =
   | { type: 'PING' }
   | { type: 'RECEIVE_OFFER'; offerUri: string }
+  | { type: 'WALLET_TASK_DONE' }
   | { type: 'REFRESH_BADGE' }
   | { type: 'GET_STATUS' }
 
@@ -14,6 +15,7 @@ export type ExtensionResponse =
   | { type: 'STATUS'; initialized: boolean; credentialCount: number }
 
 chrome.runtime.onInstalled.addListener(() => {
+  void chrome.storage.local.remove([PENDING_OFFER_KEY, RECEIVE_STATUS_KEY])
   void updateBadge()
 })
 
@@ -39,7 +41,16 @@ async function handleMessage(
     }
 
     case 'RECEIVE_OFFER': {
-      await chrome.storage.local.set({ [PENDING_OFFER_KEY]: message.offerUri })
+      const offerUri = message.offerUri
+      if (typeof offerUri === 'string' && offerUri.startsWith('openid-credential-offer:')) {
+        await receiveOfferInExtension(offerUri)
+      }
+      sendResponse({ type: 'OFFER_ACKNOWLEDGED' })
+      break
+    }
+
+    case 'WALLET_TASK_DONE': {
+      if (await chrome.offscreen.hasDocument()) await chrome.offscreen.closeDocument()
       sendResponse({ type: 'OFFER_ACKNOWLEDGED' })
       break
     }
@@ -68,6 +79,19 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local' || !changes[CREDENTIAL_COUNT_KEY]) return
   void applyBadge(Number(changes[CREDENTIAL_COUNT_KEY].newValue ?? 0))
 })
+
+async function receiveOfferInExtension(offerUri: string): Promise<void> {
+  if (await chrome.offscreen.hasDocument()) await chrome.offscreen.closeDocument()
+  await chrome.storage.local.set({
+    [PENDING_OFFER_KEY]: offerUri,
+    [RECEIVE_STATUS_KEY]: { state: 'working', message: 'Opening the wallet… Keep this popup open.' },
+  })
+  try {
+    await chrome.action.openPopup()
+  } catch {
+    // Chrome only allows this from some user gestures. Clicking the toolbar icon opens the same popup.
+  }
+}
 
 async function updateBadge(): Promise<void> {
   await applyBadge(await readCredentialCount())

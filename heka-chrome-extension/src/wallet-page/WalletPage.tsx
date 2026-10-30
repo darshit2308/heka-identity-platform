@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { getOrCreateAgent } from '../credo/lazy-agent'
 import { receiveCredentialOffer } from '../oid4vci/receive'
 import { handlePresentationRequest, submitPresentation, type ResolvedPresentationRequest } from '../oid4vp/present'
+import { PENDING_OFFER_KEY, RECEIVE_STATUS_KEY } from '../wallet/storage-keys'
 
 type Status = { state: 'loading' } | { state: 'ready' } | { state: 'error'; message: string }
 type FlowStatus = { state: 'idle' } | { state: 'working' } | { state: 'done'; message: string } | { state: 'error'; message: string }
@@ -29,11 +30,16 @@ export const WalletPage: React.FC = () => {
         if (cancelled) return
         setInitMs(Math.round(performance.now() - started))
         setStatus({ state: 'ready' })
-        if (offer) await receiveOffer(offer, setFlow)
+        const pendingOffer = offer ?? (await takePendingOffer())
+        if (pendingOffer) await receiveOffer(pendingOffer, setFlow)
         if (request) await resolvePresentation(request, setFlow, setPresentation)
       } catch (error: unknown) {
         if (cancelled) return
-        setStatus({ state: 'error', message: error instanceof Error ? error.message : 'Wallet initialization failed' })
+        const message = error instanceof Error ? error.message : 'Wallet initialization failed'
+        setStatus({ state: 'error', message })
+        await chrome.storage.local.set({ [RECEIVE_STATUS_KEY]: { state: 'error', message } })
+      } finally {
+        if (!cancelled) void chrome.runtime.sendMessage({ type: 'WALLET_TASK_DONE' })
       }
     })()
     return () => {
@@ -79,13 +85,25 @@ export const WalletPage: React.FC = () => {
   )
 }
 
+async function takePendingOffer(): Promise<string | null> {
+  const stored = await chrome.storage.local.get(PENDING_OFFER_KEY)
+  const pending = stored[PENDING_OFFER_KEY]
+  if (typeof pending !== 'string' || pending.length === 0) return null
+  await chrome.storage.local.remove(PENDING_OFFER_KEY)
+  return pending
+}
+
 async function receiveOffer(offer: string, setFlow: (status: FlowStatus) => void): Promise<void> {
   setFlow({ state: 'working' })
   try {
     const credentials = await receiveCredentialOffer(offer)
-    setFlow({ state: 'done', message: `Received ${credentials.length} credential${credentials.length === 1 ? '' : 's'}.` })
+    const message = `Received ${credentials.length} credential${credentials.length === 1 ? '' : 's'}.`
+    setFlow({ state: 'done', message })
+    await chrome.storage.local.set({ [RECEIVE_STATUS_KEY]: { state: 'done', message } })
   } catch (error: unknown) {
-    setFlow({ state: 'error', message: error instanceof Error ? error.message : 'Credential receive failed' })
+    const message = error instanceof Error ? error.message : 'Credential receive failed'
+    setFlow({ state: 'error', message })
+    await chrome.storage.local.set({ [RECEIVE_STATUS_KEY]: { state: 'error', message } })
   }
 }
 

@@ -28,7 +28,7 @@ describe('credential summary cache', () => {
       getTags: () => ({ vct: 'https://hiero.ledger.org/vct/GithubContributorCredential' }),
       firstCredential: {
         payload: { iss: 'https://issuer.example' },
-        prettyClaims: { githubUsername: 'octocat' },
+        prettyClaims: { githubUsername: 'octocat', gpgFingerprint: 'AABB' },
       },
     } as unknown as SdJwtVcRecord
     const agent = {
@@ -44,9 +44,9 @@ describe('credential summary cache', () => {
         vct: 'https://hiero.ledger.org/vct/GithubContributorCredential',
         issuer: 'https://issuer.example',
         issuedAt: '2026-10-30T00:00:00.000Z',
-        claims: { githubUsername: 'octocat' },
       },
     ])
-    expect(store.get(CREDENTIALS_SUMMARY_KEY)).toEqual(await loadCredentialSummaries())
+    expect(JSON.stringify(store.get(CREDENTIALS_SUMMARY_KEY))).not.toContain('octocat')
+    expect(JSON.stringify(store.get(CREDENTIALS_SUMMARY_KEY))).not.toContain('AABB')
   })
 })

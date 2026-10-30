@@ -4,3 +4,4 @@ export function walletPageUrl(params?: { offer?: string; request?: string }): st
   if (params?.request) url.searchParams.set('request', params.request)
   return url.toString()
 }
+

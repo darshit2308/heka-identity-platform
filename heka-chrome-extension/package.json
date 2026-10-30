@@ -14,6 +14,7 @@
   "dependencies": {
     "@credo-ts/core": "0.7.0",
     "@credo-ts/openid4vc": "0.7.0",
+    "@hiero-did-sdk/resolver": "0.1.8",
     "events": "^3.3.0",
     "idb": "^8.0.0",
     "react": "^18.3.1",

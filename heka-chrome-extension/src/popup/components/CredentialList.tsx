@@ -57,7 +57,6 @@ const CredentialCard: React.FC<{ credential: CredentialSummary }> = ({ credentia
     : 'date unavailable'
   const truncate = (value: string, head = 14, tail = 8) =>
     value.length > head + tail + 3 ? `${value.slice(0, head)}…${value.slice(-tail)}` : value
-  const claims = Object.entries(credential.claims).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
 
   return (
     <div style={s.card}>
@@ -85,9 +84,6 @@ const CredentialCard: React.FC<{ credential: CredentialSummary }> = ({ credentia
         <div style={s.cardBody}>
           <InfoRow label="Type" value={truncate(credential.vct, 22, 10)} mono />
           <InfoRow label="Issuer" value={truncate(credential.issuer, 16, 8)} mono />
-          {claims.map(([name, value]) => (
-            <InfoRow key={name} label={name} value={truncate(value, 18, 8)} mono />
-          ))}
         </div>
       )}
     </div>

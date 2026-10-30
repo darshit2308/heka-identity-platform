@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 
-import { walletPageUrl } from '../../wallet/page-url'
 
 interface Props {
   initialOfferUri?: string
@@ -22,7 +21,7 @@ export const ReceiveCredential: React.FC<Props> = ({ initialOfferUri, onReceived
       setState({ status: 'error', error: 'Paste an openid-credential-offer URI' })
       return
     }
-    window.open(walletPageUrl({ offer: trimmed }))
+    void chrome.runtime.sendMessage({ type: 'RECEIVE_OFFER', offerUri: trimmed })
     onReceived()
   }
 

@@ -117,6 +117,9 @@ export default defineConfig({
         __dirname,
         'node_modules/@digitalcredentials/open-badges-context/js/index.js',
       ),
+      // The package export points at the Node build. The extension only needs
+      // PublicKey and the browser client while resolving did:hedera.
+      '@hashgraph/sdk': resolve(__dirname, 'node_modules/@hashgraph/sdk/lib/browser.js'),
     },
   },
 });
