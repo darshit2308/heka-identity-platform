@@ -16,6 +16,11 @@ export enum PresentationSessionState {
  */
 @Entity({ tableName: 'presentation_sessions' })
 @Index({ properties: ['owner', 'repo', 'prNumber', 'headSha'] })
+@Index({
+  name: 'presentation_sessions_one_open_per_commit',
+  properties: ['owner', 'repo', 'prNumber', 'headSha'],
+  options: { unique: true, where: "state in ('pending', 'in_progress')" },
+})
 @Index({ properties: ['githubAccountId', 'state'] })
 export class PresentationSession extends Identified {
   @Property({ type: 'string' })

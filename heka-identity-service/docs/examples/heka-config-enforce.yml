@@ -10,7 +10,9 @@ contributor_identity:
     - did:hedera
   presentation:
     format: dc+sd-jwt
-    max_age_seconds: 900
+    # Credential age since iat. 7776000 seconds is 90 days, the credential lifetime.
+    # The 15-minute OID4VP session is presentation freshness and is not this field.
+    max_age_seconds: 7776000
   grace_period:
     enabled: false
     days: 14

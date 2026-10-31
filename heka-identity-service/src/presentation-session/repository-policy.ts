@@ -1,6 +1,8 @@
 import { parse } from 'yaml'
 import { z } from 'zod'
 
+import { CONTRIBUTOR_CREDENTIAL_LIFETIME_SECONDS } from 'contributor-credential/contributor-credential.constants'
+
 export type PolicyMode = 'warn' | 'enforce' | 'disabled'
 
 export interface ResolvedPolicy {
@@ -14,12 +16,17 @@ export interface ResolvedPolicy {
   configWarning?: 'repository_config_invalid'
 }
 
+/**
+ * Missing config. `maxAgeSeconds` is the maximum credential age since `iat`,
+ * not presentation freshness. It matches the 90-day credential lifetime.
+ * The 15-minute OID4VP session is a separate bound.
+ */
 export const DEFAULT_POLICY: ResolvedPolicy = {
   mode: 'warn',
   trustedIssuers: [],
   requiredCredentials: ['GithubContributorCredential'],
   acceptedIssuerDidMethods: ['did:hedera'],
-  maxAgeSeconds: 900,
+  maxAgeSeconds: CONTRIBUTOR_CREDENTIAL_LIFETIME_SECONDS,
   graceEnabled: false,
   graceDays: 14,
 }

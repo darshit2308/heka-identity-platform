@@ -5,7 +5,11 @@ Each row names the automated test or says `manual`. There is no live Credo-to-He
 - Fresh credential, trusted issuer, matching account: `presentation-decision.spec.ts` — `accepts a fresh credential from the trusted issuer for the pull-request account`
 - Wrong account, untrusted issuer, expired credential: `presentation-decision.spec.ts` — `rejects a different account, an untrusted issuer, and an expired credential`
 - Status list in warn and enforce: `presentation-decision.spec.ts` — `warns when a status list is present and fails that case in enforce mode`
+- Credential age is 90 days, not 15 minutes: `presentation-decision.spec.ts` — `accepts a credential issued minutes ago and rejects one older than 90 days`
 - Stale credential, rejected DID method, issuer outside the allow list: `presentation-decision.spec.ts` — `fails a stale credential, a rejected issuer method, and an issuer outside the allow list`
+- Concurrent open session: `presentation-session.service.spec.ts` — `returns the open session that won a concurrent insert`
+- Delivery id claim: `github-webhook-delivery.service.spec.ts` — `claims a delivery once inside the TTL and allows it again after expiry`
+- Invalid policy on the verification page: `ContributorVerify.test.tsx` — `shows an invalid repository policy`
 - Fifteen-minute cover: `presentation-decision.spec.ts` — `covers another pull request inside 15 minutes and not after`
 - Reuse the open session: `presentation-session.service.spec.ts` — `reuses an open session for the same pull request and commit`
 - Recent success closes a new pull request: `presentation-session.service.spec.ts` — `closes a new pull request when the same account presented within 15 minutes`

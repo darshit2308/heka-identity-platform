@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
-import { IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator'
+import { IsInt, IsOptional, IsString, Matches, MaxLength, Min } from 'class-validator'
 
 export class CreatePresentationSessionDto {
   @ApiProperty()
@@ -54,6 +54,14 @@ export class ClosePresentationSessionDto {
   @IsInt()
   @Min(1)
   public prNumber!: number
+}
+
+export class ClaimWebhookDeliveryDto {
+  @ApiProperty()
+  @IsString()
+  @MaxLength(128)
+  @Matches(/^[A-Za-z0-9_-]+$/)
+  public deliveryId!: string
 }
 
 export class AttachCheckRunDto {

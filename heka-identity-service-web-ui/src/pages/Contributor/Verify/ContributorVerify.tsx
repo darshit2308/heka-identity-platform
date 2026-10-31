@@ -12,7 +12,11 @@ interface SessionView {
   failureReason?: string;
   warning?: string;
   humanReason?: string;
+  configWarning?: string;
 }
+
+const INVALID_POLICY =
+  'The repository policy file is invalid. Verification is using warn mode until .heka/config.yml is fixed.';
 
 const agency = process.env.REACT_APP_AGENCY_ENDPOINT ?? '';
 
@@ -95,6 +99,9 @@ const ContributorVerify = () => {
     <main className={cls.page}>
       <h1 className={cls.title}>Contributor verification</h1>
       {error && <p className={cls.error}>{error}</p>}
+      {session?.configWarning === 'repository_config_invalid' && (
+        <p className={cls.warning}>{INVALID_POLICY}</p>
+      )}
       {!session && !error && <p className={cls.copy}>Loading this verification…</p>}
       {session && open && (
         <p className={cls.copy}>

@@ -67,6 +67,17 @@ describe('ContributorVerify', () => {
     expect(window.postMessage).toHaveBeenCalledTimes(1);
   });
 
+  it('shows an invalid repository policy', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ...pending, configWarning: 'repository_config_invalid' }),
+    }) as jest.Mock;
+
+    renderPage();
+
+    expect(await screen.findByText(/repository policy file is invalid/i)).toBeTruthy();
+  });
+
   it('posts retry when verification failed', async () => {
     const failed = {
       ...pending,

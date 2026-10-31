@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { CONTRIBUTOR_CREDENTIAL_VCT } from 'contributor-credential/contributor-credential.constants'
+import {
+  CONTRIBUTOR_CREDENTIAL_LIFETIME_SECONDS,
+  CONTRIBUTOR_CREDENTIAL_VCT,
+} from 'contributor-credential/contributor-credential.constants'
 
 import { decidePresentation, recentSuccessCovers } from '../presentation-decision'
 
@@ -79,6 +82,27 @@ describe('decidePresentation', () => {
       policyMode: 'enforce',
     })
     expect(enforced.failureReason).toBe('revocation_unverified')
+  })
+
+  it('accepts a credential issued minutes ago and rejects one older than 90 days', () => {
+    expect(
+      decidePresentation({
+        claims: claims({ iat: now - 16 * 60 }),
+        expectedAccountId: '123',
+        trustedIssuerDid: issuer,
+        nowSeconds: now,
+        policyMode: 'enforce',
+      }).outcome,
+    ).toBe('success')
+    expect(
+      decidePresentation({
+        claims: claims({ iat: now - CONTRIBUTOR_CREDENTIAL_LIFETIME_SECONDS - 1 }),
+        expectedAccountId: '123',
+        trustedIssuerDid: issuer,
+        nowSeconds: now,
+        policyMode: 'enforce',
+      }).failureReason,
+    ).toBe('credential_stale')
   })
 
   it('fails a stale credential, a rejected issuer method, and an issuer outside the allow list', () => {
