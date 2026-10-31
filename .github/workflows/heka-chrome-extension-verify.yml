@@ -1,0 +1,60 @@
+name: Verify Heka Chrome extension changes
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'heka-chrome-extension/**'
+      - '.github/workflows/heka-chrome-extension-verify.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    defaults:
+      run:
+        working-directory: ./heka-chrome-extension
+    name: Build and check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - name: Prepare Github Runner
+        uses: pandaswhocode/initialize-github-job@74303607c68fe88ff9b7bfc05c40ca948fa04b13 # v1.5.0
+        with:
+          checkout: 'true'
+          checkout-ref: '${{ github.ref }}'
+          checkout-token: '${{ secrets.GITHUB_TOKEN }}'
+          setup-node: 'true'
+          node-version: '22'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Run tests
+        run: yarn test
+
+      - name: Run type-check
+        run: yarn type-check
+
+      - name: Run ESLint
+        run: yarn lint
+
+      - name: Production build
+        run: yarn build
+
+      - name: CSP check
+        run: yarn check:csp
