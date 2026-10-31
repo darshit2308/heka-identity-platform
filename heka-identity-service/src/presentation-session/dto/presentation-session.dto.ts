@@ -40,6 +40,22 @@ export class CreatePresentationSessionDto {
   public policyYaml?: string
 }
 
+export class ClosePresentationSessionDto {
+  @ApiProperty()
+  @IsString()
+  public owner!: string
+
+  @ApiProperty()
+  @IsString()
+  public repo!: string
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  public prNumber!: number
+}
+
 export class AttachCheckRunDto {
   @ApiProperty()
   @IsString()
