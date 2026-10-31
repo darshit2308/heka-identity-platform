@@ -17,6 +17,7 @@ import { Wallet } from 'common/entities'
 import AgentConfig from 'config/agent'
 import PresentationSessionConfig from 'config/presentation-session'
 import { CONTRIBUTOR_CREDENTIAL_VCT } from 'contributor-credential/contributor-credential.constants'
+import { ContributorOnboardingService } from 'contributor-onboarding/contributor-onboarding.service'
 import { OpenId4VcVerificationSessionService } from 'openid4vc/verification-sessions/verification-session.service'
 import { OpenId4VcVerifierService } from 'openid4vc/verifier/verifier.service'
 import { getWalletId } from 'utils/auth'
@@ -31,6 +32,7 @@ import {
   recentSuccessCovers,
 } from './presentation-decision'
 import { PresentationSession, PresentationSessionState } from './presentation-session.entity'
+import { DEFAULT_POLICY, type ResolvedPolicy } from './repository-policy'
 
 const OPEN_STATES = [PresentationSessionState.Pending, PresentationSessionState.InProgress]
 
@@ -42,6 +44,7 @@ export interface CreatePresentationSessionInput {
   repo: string
   prNumber: number
   headSha: string
+  policyYaml?: string
 }
 
 export interface PresentationSessionView {
@@ -54,6 +57,8 @@ export interface PresentationSessionView {
   failureReason?: string
   warning?: string
   humanReason?: string
+  disposition: 'skip' | 'grace' | 'verify'
+  configWarning?: string
 }
 
 @Injectable()
@@ -71,6 +76,7 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
     private readonly verifiers: OpenId4VcVerifierService,
     private readonly checks: GithubCheckNotifier,
     private readonly policy: PolicyConfigProvider,
+    private readonly onboarding: ContributorOnboardingService,
   ) {}
 
   public onModuleInit(): void {
@@ -119,16 +125,36 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
       return this.toView(covered)
     }
 
-    const session = new PresentationSession()
-    session.githubAccountId = input.githubAccountId
-    session.githubUsername = input.githubUsername
-    session.installationId = input.installationId
-    session.owner = input.owner
-    session.repo = input.repo
-    session.prNumber = input.prNumber
-    session.headSha = input.headSha
-    session.state = PresentationSessionState.Pending
-    session.expiresAt = new Date(now.getTime() + PRESENTATION_SESSION_TTL_MS)
+    const resolved = this.policy.resolve(input.policyYaml)
+    const session = this.blankSession(input, now)
+    this.rememberPolicy(session, resolved, now)
+
+    if (resolved.mode === 'disabled') {
+      session.state = PresentationSessionState.Success
+      session.completedAt = now
+      session.warning = 'policy_disabled'
+      session.humanReason = 'Verification is disabled for this repository.'
+      em.persist(session)
+      await em.flush()
+      return this.toView(session)
+    }
+
+    if (resolved.graceEnabled) {
+      const binding = await this.onboarding.findVerifiedBindingByGithubAccountId(input.githubAccountId)
+      const start = await this.graceStart(em, input, now)
+      const until = new Date(start.getTime() + resolved.graceDays * 24 * 60 * 60 * 1000)
+      session.graceUntil = until
+      if (!binding && now < until) {
+        session.state = PresentationSessionState.Success
+        session.completedAt = now
+        session.warning = 'grace_period_active'
+        session.humanReason = `Onboarding grace is active until ${until.toISOString()}.`
+        em.persist(session)
+        await em.flush()
+        return this.toView(session)
+      }
+    }
+
     const offer = await this.openAuthorizationRequest()
     session.authorizationRequestUri = offer.authorizationRequestUri
     session.verificationSessionId = offer.verificationSessionId
@@ -246,6 +272,7 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
       const verified = await tenantAgent.openid4vc.verifier.getVerifiedAuthorizationResponse(
         session.verificationSessionId!,
       )
+      const stored = this.storedPolicy(session)
       this.finish(
         session,
         decidePresentation({
@@ -253,7 +280,11 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
           expectedAccountId: session.githubAccountId,
           trustedIssuerDid: session.trustedIssuerDid ?? '',
           nowSeconds: Math.floor(Date.now() / 1000),
-          policyMode: this.policy.mode(),
+          policyMode: stored.mode === 'enforce' ? 'enforce' : 'warn',
+          maxAgeSeconds: stored.maxAgeSeconds,
+          allowedIssuerDids: stored.trustedIssuers,
+          acceptedIssuerDidMethods: stored.acceptedIssuerDidMethods,
+          requiredCredentials: stored.requiredCredentials,
         }),
       )
     })
@@ -380,7 +411,55 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
       failureReason: session.failureReason ?? undefined,
       warning: session.warning ?? undefined,
       humanReason: session.humanReason ?? undefined,
+      disposition: this.disposition(session),
+      configWarning: session.configWarning ?? undefined,
     }
+  }
+
+  private blankSession(input: CreatePresentationSessionInput, now: Date): PresentationSession {
+    const session = new PresentationSession()
+    session.githubAccountId = input.githubAccountId
+    session.githubUsername = input.githubUsername
+    session.installationId = input.installationId
+    session.owner = input.owner
+    session.repo = input.repo
+    session.prNumber = input.prNumber
+    session.headSha = input.headSha
+    session.state = PresentationSessionState.Pending
+    session.createdAt = now
+    session.expiresAt = new Date(now.getTime() + PRESENTATION_SESSION_TTL_MS)
+    return session
+  }
+
+  private rememberPolicy(session: PresentationSession, policy: ResolvedPolicy, now: Date): void {
+    session.policyMode = policy.mode
+    session.configWarning = policy.configWarning ?? null
+    session.maxAgeSeconds = policy.maxAgeSeconds
+    session.resolvedPolicy = JSON.stringify(policy)
+    if (policy.graceEnabled) {
+      session.graceUntil = new Date(now.getTime() + policy.graceDays * 24 * 60 * 60 * 1000)
+    }
+  }
+
+  private async graceStart(em: EntityManager, input: CreatePresentationSessionInput, now: Date): Promise<Date> {
+    const prior = await em.find(PresentationSession, {
+      owner: input.owner,
+      repo: input.repo,
+      githubAccountId: input.githubAccountId,
+    })
+    if (prior.length === 0) return now
+    return prior.reduce((oldest, row) => (row.createdAt < oldest ? row.createdAt : oldest), prior[0].createdAt)
+  }
+
+  private storedPolicy(session: PresentationSession): ResolvedPolicy {
+    if (!session.resolvedPolicy) return { ...DEFAULT_POLICY }
+    return JSON.parse(session.resolvedPolicy) as ResolvedPolicy
+  }
+
+  private disposition(session: PresentationSession): 'skip' | 'grace' | 'verify' {
+    if (session.warning === 'policy_disabled') return 'skip'
+    if (session.warning === 'grace_period_active') return 'grace'
+    return 'verify'
   }
 }
 

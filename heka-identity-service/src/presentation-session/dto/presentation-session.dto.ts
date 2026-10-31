@@ -1,6 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
-import { IsInt, IsString, Min } from 'class-validator'
+import { IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator'
 
 export class CreatePresentationSessionDto {
   @ApiProperty()
@@ -32,6 +32,12 @@ export class CreatePresentationSessionDto {
   @ApiProperty()
   @IsString()
   public headSha!: string
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(16384)
+  public policyYaml?: string
 }
 
 export class AttachCheckRunDto {

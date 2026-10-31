@@ -2,6 +2,7 @@ import { MikroOrmModule } from '@mikro-orm/nestjs'
 import { Module } from '@nestjs/common'
 
 import { AgentModule } from 'common/agent'
+import { ContributorOnboardingModule } from 'contributor-onboarding/contributor-onboarding.module'
 import { GpgChallengeModule } from 'gpg-challenge/gpg-challenge.module'
 import { OpenId4VcVerificationSessionModule } from 'openid4vc/verification-sessions'
 import { OpenId4VcVerifierModule } from 'openid4vc/verifier/verifier.module'
@@ -19,6 +20,7 @@ import { PresentationSessionService } from './presentation-session.service'
     OpenId4VcVerificationSessionModule,
     OpenId4VcVerifierModule,
     GpgChallengeModule,
+    ContributorOnboardingModule,
   ],
   controllers: [PresentationSessionController],
   providers: [PresentationSessionService, GithubCheckNotifier, PolicyConfigProvider],
