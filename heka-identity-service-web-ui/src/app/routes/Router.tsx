@@ -6,6 +6,7 @@ import UnauthenticatedLayout from '@/components/Layout/UnauthenticatedLayout';
 import AgeVerificationDemo from '@/pages/AgeVerificationDemo/AgeVerificationDemo';
 import ContributorHub from '@/pages/Contributor/ContributorHub';
 import ContributorOnboarding from '@/pages/Contributor/Onboarding/ContributorOnboarding';
+import ContributorVerify from '@/pages/Contributor/Verify/ContributorVerify';
 import Demo from '@/pages/Demo/Demo';
 import GithubCallback from '@/pages/GithubCallback/GithubCallback';
 import Home from '@/pages/Home/Home';
@@ -74,6 +75,7 @@ const AuthenticatedRoutes = () => (
       />
       <Route path={ROUTES.CONTRIBUTOR} element={<ContributorHub />} />
       <Route path={ROUTES.CONTRIBUTOR_ONBOARDING} element={<ContributorOnboarding />} />
+      <Route path={ROUTES.PRESENTATION_VERIFY} element={<ContributorVerify />} />
       <Route path="*" element={<Navigate to={ROUTES.MAIN} />} />
     </Route>
   </Routes>
@@ -95,6 +97,7 @@ const UnauthenticatedRoutes = () => (
         path={ROUTES.AGE_DEMO}
         element={<AgeVerificationDemo />}
       />
+      <Route path={ROUTES.PRESENTATION_VERIFY} element={<ContributorVerify />} />
       <Route path="*" element={<Navigate to={ROUTES.MAIN} />} />
 
     </Route>

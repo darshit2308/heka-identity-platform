@@ -1,0 +1,51 @@
+$pink: #c6136a;
+$ink: #141115;
+$gray: #6f6b74;
+$line: #e9e5ea;
+$white: #fff;
+
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 56px 24px 80px;
+}
+
+.title {
+  margin: 0 0 16px;
+  color: $ink;
+  font-size: 32px;
+}
+
+.copy {
+  margin: 0;
+  color: $gray;
+  line-height: 1.5;
+}
+
+.success {
+  margin: 0;
+  color: #17663a;
+  line-height: 1.5;
+}
+
+.warning {
+  margin: 16px 0 0;
+  color: #8a5a00;
+  line-height: 1.5;
+}
+
+.error {
+  margin: 0;
+  color: $pink;
+  line-height: 1.5;
+}
+
+.retry {
+  margin-top: 20px;
+  padding: 12px 18px;
+  border: 1px solid $line;
+  border-radius: 12px;
+  background: $white;
+  color: $ink;
+  cursor: pointer;
+}

@@ -8,6 +8,7 @@ import mikroOrm from './mikro-orm'
 import oidc from './oidc'
 import pino from './pino'
 import prepareWallet from './prepare-wallet'
+import presentationSession from './presentation-session'
 import roleModel from './role-model'
 import webhook from './webhook'
 
@@ -24,4 +25,5 @@ export default [
   roleModel,
   prepareWallet,
   github,
+  presentationSession,
 ]
