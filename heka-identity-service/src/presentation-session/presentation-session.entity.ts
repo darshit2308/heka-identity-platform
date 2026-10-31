@@ -55,6 +55,21 @@ export class PresentationSession extends Identified {
   public trustedIssuerDid?: string | null
 
   @Property({ nullable: true, type: 'string' })
+  public policyMode?: string | null
+
+  @Property({ nullable: true, type: 'string' })
+  public configWarning?: string | null
+
+  @Property({ nullable: true, type: 'number' })
+  public maxAgeSeconds?: number | null
+
+  @Property({ nullable: true, type: 'Date' })
+  public graceUntil?: Date | null
+
+  @Property({ nullable: true, type: 'text' })
+  public resolvedPolicy?: string | null
+
+  @Property({ nullable: true, type: 'string' })
   public failureReason?: string | null
 
   @Property({ nullable: true, type: 'string' })

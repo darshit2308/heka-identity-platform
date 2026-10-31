@@ -80,6 +80,38 @@ describe('decidePresentation', () => {
     })
     expect(enforced.failureReason).toBe('revocation_unverified')
   })
+
+  it('fails a stale credential, a rejected issuer method, and an issuer outside the allow list', () => {
+    expect(
+      decidePresentation({
+        claims: claims({ iat: now - 1_000 }),
+        expectedAccountId: '123',
+        trustedIssuerDid: issuer,
+        nowSeconds: now,
+        policyMode: 'enforce',
+        maxAgeSeconds: 900,
+      }).failureReason,
+    ).toBe('credential_stale')
+    expect(
+      decidePresentation({
+        claims: claims({ iss: 'did:key:z6Mk' }),
+        expectedAccountId: '123',
+        trustedIssuerDid: issuer,
+        nowSeconds: now,
+        policyMode: 'enforce',
+      }).failureReason,
+    ).toBe('issuer_method_rejected')
+    expect(
+      decidePresentation({
+        claims: claims(),
+        expectedAccountId: '123',
+        trustedIssuerDid: issuer,
+        nowSeconds: now,
+        policyMode: 'enforce',
+        allowedIssuerDids: ['did:hedera:testnet:other'],
+      }).failureReason,
+    ).toBe('issuer_untrusted')
+  })
 })
 
 describe('recentSuccessCovers', () => {
