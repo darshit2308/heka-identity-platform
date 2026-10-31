@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CONTRIBUTOR_CREDENTIAL_VCT } from 'contributor-credential/contributor-credential.constants'
 
 import { GithubCheckNotifier } from '../github-check-notifier'
+import { PolicyConfigProvider } from '../policy-config.provider'
 import { PresentationSession, PresentationSessionState } from '../presentation-session.entity'
 import { PresentationSessionService } from '../presentation-session.service'
 
@@ -59,6 +60,49 @@ const input = {
   headSha: 'abc',
 }
 
+function policyYaml(options: { mode?: string; grace?: boolean }): string {
+  return `
+version: 1
+contributor_identity:
+  mode: ${options.mode ?? 'warn'}
+  trusted_issuers: []
+  required_credentials:
+    - GithubContributorCredential
+  accepted_issuer_did_methods:
+    - did:hedera
+  presentation:
+    format: dc+sd-jwt
+    max_age_seconds: 900
+  grace_period:
+    enabled: ${options.grace ? 'true' : 'false'}
+    days: 14
+`
+}
+
+function issuingSessions() {
+  return {
+    tenantId: 'tenant-1',
+    agent: {
+      modules: {
+        tenants: {
+          withTenantAgent: async (_query: unknown, callback: (tenantAgent: unknown) => Promise<void>) => {
+            await callback({
+              dids: { getCreatedDids: () => Promise.resolve([{ did: 'did:hedera:testnet:issuer' }]) },
+            })
+          },
+        },
+      },
+    },
+    verificationSessions: {
+      createRequest: vi.fn().mockResolvedValue({
+        authorizationRequest: 'openid4vp://request',
+        verificationSession: { id: 'credo-session' },
+      }),
+    },
+    verifiers: { find: vi.fn().mockResolvedValue([{}]), createVerifier: vi.fn() },
+  }
+}
+
 describe('PresentationSessionService', () => {
   const checks = { update: vi.fn().mockResolvedValue(true) }
 
@@ -66,16 +110,26 @@ describe('PresentationSessionService', () => {
     checks.update.mockClear()
   })
 
-  function build(rows: PresentationSession[]) {
+  function build(
+    rows: PresentationSession[],
+    extras?: {
+      tenantId?: string
+      agent?: unknown
+      verificationSessions?: unknown
+      verifiers?: unknown
+      binding?: unknown
+    },
+  ) {
     return new PresentationSessionService(
-      memory(rows) as never,
-      {} as never,
+      memory(rows, extras?.tenantId) as never,
+      (extras?.agent ?? {}) as never,
       { contributorIssuerDemoUser: 'demo' } as never,
       { pageBaseUrl: 'http://localhost:8000' } as never,
-      {} as never,
-      {} as never,
+      (extras?.verificationSessions ?? {}) as never,
+      (extras?.verifiers ?? {}) as never,
       checks as never,
-      { mode: () => 'warn' } as never,
+      new PolicyConfigProvider(),
+      { findVerifiedBindingByGithubAccountId: () => Promise.resolve(extras?.binding) } as never,
     )
   }
 
@@ -179,6 +233,7 @@ describe('PresentationSessionService', () => {
       {} as never,
       checks as never,
       { mode: () => 'warn' } as never,
+      {} as never,
     )
 
     await service.sweep(new Date('2026-10-30T12:05:00.000Z'))
@@ -186,6 +241,73 @@ describe('PresentationSessionService', () => {
     expect(open.state).toBe(PresentationSessionState.Success)
     expect(open.failureReason).toBeNull()
     expect(checks.update).toHaveBeenCalledWith(expect.objectContaining({ checkRunId: '42', conclusion: 'success' }))
+  })
+
+  it('treats a missing policy document as warn and still opens a wallet request', async () => {
+    const sessions = issuingSessions()
+    const view = await build([], sessions).create(input, new Date('2026-10-30T12:00:00.000Z'))
+    expect(view.disposition).toBe('verify')
+    expect(view.configWarning).toBeUndefined()
+    expect(sessions.verificationSessions.createRequest).toHaveBeenCalled()
+  })
+
+  it('keeps warn mode when the policy document is invalid', async () => {
+    const sessions = issuingSessions()
+    const view = await build([], sessions).create(
+      { ...input, policyYaml: 'version: nope' },
+      new Date('2026-10-30T12:00:00.000Z'),
+    )
+    expect(view.disposition).toBe('verify')
+    expect(view.configWarning).toBe('repository_config_invalid')
+  })
+
+  it('does not open a wallet request when verification is disabled', async () => {
+    const sessions = issuingSessions()
+    const view = await build([], sessions).create(
+      { ...input, policyYaml: policyYaml({ mode: 'disabled' }) },
+      new Date('2026-10-30T12:00:00.000Z'),
+    )
+    expect(view.disposition).toBe('skip')
+    expect(view.state).toBe(PresentationSessionState.Success)
+    expect(sessions.verificationSessions.createRequest).not.toHaveBeenCalled()
+  })
+
+  it('covers the first pull request inside the grace window without a wallet request', async () => {
+    const sessions = issuingSessions()
+    const view = await build([], sessions).create(
+      { ...input, policyYaml: policyYaml({ grace: true }) },
+      new Date('2026-10-30T12:00:00.000Z'),
+    )
+    expect(view.disposition).toBe('grace')
+    expect(sessions.verificationSessions.createRequest).not.toHaveBeenCalled()
+  })
+
+  it('asks for a presentation after the grace window', async () => {
+    const sessions = issuingSessions()
+    const earlier = session({
+      ...input,
+      prNumber: 1,
+      headSha: 'old',
+      createdAt: new Date('2026-10-01T12:00:00.000Z'),
+      state: PresentationSessionState.Success,
+      expiresAt: new Date('2026-10-01T12:15:00.000Z'),
+    })
+    const view = await build([earlier], sessions).create(
+      { ...input, policyYaml: policyYaml({ grace: true }) },
+      new Date('2026-10-30T12:00:00.000Z'),
+    )
+    expect(view.disposition).toBe('verify')
+    expect(sessions.verificationSessions.createRequest).toHaveBeenCalled()
+  })
+
+  it('does not apply grace when the GitHub account is already verified', async () => {
+    const sessions = issuingSessions()
+    const view = await build([], { ...sessions, binding: { gpgFingerprint: 'aa', verifiedAt: new Date() } }).create(
+      { ...input, policyYaml: policyYaml({ grace: true }) },
+      new Date('2026-10-30T12:00:00.000Z'),
+    )
+    expect(view.disposition).toBe('verify')
+    expect(sessions.verificationSessions.createRequest).toHaveBeenCalled()
   })
 })
 

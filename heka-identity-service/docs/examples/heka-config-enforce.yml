@@ -1,0 +1,16 @@
+# did:hedera:testnet:REPLACE_WITH_DEMO_ISSUER must be the demo tenant DID from POST /prepare-wallet.
+version: 1
+contributor_identity:
+  mode: enforce
+  trusted_issuers:
+    - did:hedera:testnet:REPLACE_WITH_DEMO_ISSUER
+  required_credentials:
+    - GithubContributorCredential
+  accepted_issuer_did_methods:
+    - did:hedera
+  presentation:
+    format: dc+sd-jwt
+    max_age_seconds: 900
+  grace_period:
+    enabled: false
+    days: 14

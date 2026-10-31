@@ -296,6 +296,13 @@ export class ContributorOnboardingService {
     return this.em.findOne(ContributorBinding, { githubAccountId })
   }
 
+  /** Verified link for this GitHub account, if GPG proof has been accepted. */
+  public async findVerifiedBindingByGithubAccountId(githubAccountId: string): Promise<ContributorBinding | undefined> {
+    const binding = await this.findBindingByGithubAccountId(githubAccountId)
+    if (!binding?.gpgFingerprint || !binding.verifiedAt) return undefined
+    return binding
+  }
+
   private async findBinding(tenantId: string, userId: string): Promise<ContributorBinding | null> {
     return this.em.findOne(ContributorBinding, { tenantId, userId })
   }
