@@ -1,0 +1,44 @@
+# Contributor test matrix
+
+Each row names the automated test or says `manual`. There is no live Credo-to-Hedera end-to-end suite.
+
+- Fresh credential, trusted issuer, matching account: `presentation-decision.spec.ts` — `accepts a fresh credential from the trusted issuer for the pull-request account`
+- Wrong account, untrusted issuer, expired credential: `presentation-decision.spec.ts` — `rejects a different account, an untrusted issuer, and an expired credential`
+- Status list in warn and enforce: `presentation-decision.spec.ts` — `warns when a status list is present and fails that case in enforce mode`
+- Stale credential, rejected DID method, issuer outside the allow list: `presentation-decision.spec.ts` — `fails a stale credential, a rejected issuer method, and an issuer outside the allow list`
+- Fifteen-minute cover: `presentation-decision.spec.ts` — `covers another pull request inside 15 minutes and not after`
+- Reuse the open session: `presentation-session.service.spec.ts` — `reuses an open session for the same pull request and commit`
+- Recent success closes a new pull request: `presentation-session.service.spec.ts` — `closes a new pull request when the same account presented within 15 minutes`
+- Session timeout: `presentation-session.service.spec.ts` — `times out overdue sessions and updates the GitHub check`
+- Presentation recorded while the page is closed: `presentation-session.service.spec.ts` — `records a verified presentation during the sweep when the page is closed`
+- Missing policy is warn: `repository-policy.spec.ts` — `uses warn defaults when the document is missing`
+- Invalid policy is warn: `repository-policy.spec.ts` — `falls back to warn when the document is invalid`
+- `linked_vp` ignored: `repository-policy.spec.ts` — `reads a valid document and ignores linked_vp`
+- Disabled mode: `presentation-session.service.spec.ts` — `does not open a wallet request when verification is disabled`
+- Grace window: `presentation-session.service.spec.ts` — `covers the first pull request inside the grace window without a wallet request`
+- Grace expired: `presentation-session.service.spec.ts` — `asks for a presentation after the grace window`
+- Grace skipped after verification: `presentation-session.service.spec.ts` — `does not apply grace when the GitHub account is already verified`
+- Enforce resolver outage: `presentation-session.service.spec.ts` — `fails closed when enforce mode cannot resolve the issuer`
+- Warn resolver outage: `presentation-session.service.spec.ts` — `leaves a warn-mode session open when resolution fails`
+- Closed pull request: `presentation-session.service.spec.ts` — `closes every open session for a pull request`
+- Check update retry: `presentation-session.service.spec.ts` — `retries a timed-out check update once`
+- Rate limit window: `fixed-window-rate-limit.spec.ts` — `allows the limit, rejects the next call, and opens a new window`
+- Production GitHub secrets: `insecure-defaults.test.ts` — `requires the GitHub OAuth and status secrets in production and not in test`
+- Offer audit omits the transaction code: `contributor-credential.service.spec.ts` — `records the offer without the transaction code`
+- Login reassignment: `gpg-challenge.service.spec.ts` — `does not fetch a GPG key when the login now belongs to another account`
+- Username change: `gpg-challenge.service.spec.ts` — `reads verification from the account-id binding after a username change`
+- Non-extractable holder key: `WebCryptoKeyManagementService.spec.ts` — `creates a non-extractable P-256 key and a public JWK`
+- Missing credential message: `present-errors.spec.ts` — `says when no stored credential matches the request`
+- Missing holder key message: `present-errors.spec.ts` — `says when the holder key is gone`
+- Same selection on a later presentation: `present.spec.ts` — `submits the same selection on a later presentation`
+- Onboarding step label: `OnboardingStepper.test.tsx` — `labels the first step Link GitHub and renders four steps`
+- Verification page posts once: `ContributorVerify.test.tsx` — `posts the presentation request once`
+- Verification page retry: `ContributorVerify.test.tsx` — `posts retry when verification failed`
+- Draft pull request: GitHub App `test/index.test.ts` — `posts a neutral check for a draft and does not open a session`
+- Ready for review: GitHub App `test/index.test.ts` — `opens a session when a draft is marked ready for review`
+- Repeated delivery id: GitHub App `test/index.test.ts` — `ignores a repeated webhook delivery id`
+- Closed pull request from the App: GitHub App `test/index.test.ts` — `closes open sessions when the pull request is closed and does not create a check`
+- Fork: GitHub App `test/index.test.ts` — `verifies a forked pull request as its author and says the change comes from a fork`
+- Default-branch policy file: GitHub App `test/index.test.ts` — `sends the config file from the default branch and ignores the pull request head`
+- Live wallet presentation against Hedera: `manual`
+- Live check on a GitHub repository: `manual`
