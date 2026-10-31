@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthInfo, Role } from 'common/auth'
 import { User } from 'common/entities'
 import { ContributorOnboardingService, type VerifiedContributor } from 'contributor-onboarding'
+import { ContributorAuditEvent, ContributorAuditEventType } from 'contributor-onboarding/contributor-audit-event.entity'
 import { OpenId4VcIssuerService } from 'openid4vc/issuer/issuer.service'
 
 import {
@@ -224,6 +225,15 @@ describe('ContributorCredentialService', () => {
     beforeEach(() => {
       vi.mocked(onboardingServiceMock.getVerifiedBindingByUser).mockResolvedValue(buildContributor())
       vi.mocked(emForkMock.findOne).mockResolvedValue({ id: 'User_demo', tenantId: 'tenant-abc' } as any)
+    })
+
+    it('records the offer without the transaction code', async () => {
+      await service.issueContributorCredential(buildAuthInfo())
+
+      const event = vi.mocked(emMock.persist).mock.calls.at(-1)?.[0] as ContributorAuditEvent
+      expect(event.eventType).toBe(ContributorAuditEventType.CredentialOffered)
+      expect(event.metadata).toEqual({ expiresAt: FAKE_OFFER_EXPIRES_AT.toISOString() })
+      expect(event.metadata).not.toHaveProperty('txCode')
     })
 
     it('returns a credential offer URI for a verified contributor', async () => {

@@ -1,8 +1,9 @@
-import { Controller, HttpCode, HttpStatus, Post, UseGuards, Version } from '@nestjs/common'
+import { Controller, HttpCode, HttpStatus, Post, UseGuards, UseInterceptors, Version } from '@nestjs/common'
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 
 import { AuthInfo, JwtAuthGuard, ReqAuthInfo } from 'common/auth'
 import { AnyRole, RoleGuard } from 'common/authz'
+import { CorrelationIdInterceptor } from 'common/http/correlation-id.interceptor'
 
 import { ContributorCredentialService } from './contributor-credential.service'
 import { ContributorCredentialOfferResponseDto } from './dto/contributor-credential-offer.dto'
@@ -17,6 +18,7 @@ import { ContributorCredentialOfferResponseDto } from './dto/contributor-credent
 @UseGuards(JwtAuthGuard, RoleGuard)
 /** Any authenticated Heka role. Issuance still requires that caller's own verified binding. */
 @AnyRole()
+@UseInterceptors(CorrelationIdInterceptor)
 @Controller('contributor-credential')
 export class ContributorCredentialController {
   public constructor(private readonly contributorCredentialService: ContributorCredentialService) {}

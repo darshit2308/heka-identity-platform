@@ -100,13 +100,29 @@ function isNonProductionEnv(normalizedNodeEnv: string | undefined): boolean {
  * is unset, empty, `development` or `test` (case-insensitive). Any other value is treated as production.
  * Intended to be used as the `validate` hook of `ConfigModule.forRoot`.
  */
+const PRODUCTION_GITHUB_SECRETS = ['GITHUB_STATUS_TOKEN', 'GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET'] as const
+
+function missingProductionGithubSecrets(env: Record<string, unknown>): string[] {
+  return PRODUCTION_GITHUB_SECRETS.filter((name) => {
+    const value = env[name]
+    return typeof value !== 'string' || value.trim() === ''
+  })
+}
+
 export function assertSecureConfiguration(env: Record<string, unknown>): void {
+  const nodeEnv = normalizeNodeEnv(env.NODE_ENV)
   const names = findInsecureDefaults(env)
+  if (!isNonProductionEnv(nodeEnv) && names.length === 0) {
+    const missingGithub = missingProductionGithubSecrets(env)
+    if (missingGithub.length > 0) {
+      throw new Error(`Insecure configuration: ${missingGithub.join(', ')} must be set before running in production.`)
+    }
+  }
+
   if (names.length === 0) return
 
   const summary = `Insecure configuration: ${names.join(', ')} ${names.length === 1 ? 'is' : 'are'} unset or use publicly known default values.`
 
-  const nodeEnv = normalizeNodeEnv(env.NODE_ENV)
   if (!isNonProductionEnv(nodeEnv)) {
     // The NODE_ENV value itself is not echoed, so the message only ever contains variable names.
     const unrecognized =

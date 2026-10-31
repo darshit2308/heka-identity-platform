@@ -165,7 +165,7 @@ export async function startTestApp(options: TestAppOptions = {}): Promise<INestA
       inject: [AppConfig.KEY, AgentConfig.KEY],
     })
     .compile()
-  const app = moduleRef.createNestApplication({ bufferLogs: true })
+  const app = moduleRef.createNestApplication({ bufferLogs: true, bodyParser: false })
 
   await startApp(app)
 

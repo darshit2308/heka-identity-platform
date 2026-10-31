@@ -18,6 +18,9 @@ const secureEnv: Record<string, string> = {
   HEDERA_OPERATOR_KEY: '302e020100300506032b657004220420custom',
   MDL_ISSUER_PRIVATE_KEY: '{"kty":"EC","crv":"P-256","d":"custom"}',
   FILE_STORAGE_MINIO_SECRET_KEY: 'minio-secret',
+  GITHUB_STATUS_TOKEN: 'status-token',
+  GITHUB_CLIENT_ID: 'client-id',
+  GITHUB_CLIENT_SECRET: 'client-secret',
 }
 
 function thrownMessage(fn: () => void): string {
@@ -153,6 +156,17 @@ describe('insecure defaults', () => {
 
     afterEach(() => {
       warnSpy.mockRestore()
+    })
+
+    it('requires the GitHub OAuth and status secrets in production and not in test', () => {
+      expect(() =>
+        assertSecureConfiguration({ ...secureEnv, NODE_ENV: 'production', GITHUB_STATUS_TOKEN: '' }),
+      ).toThrow(/GITHUB_STATUS_TOKEN/)
+      const testEnv = { ...secureEnv, NODE_ENV: 'test' }
+      delete testEnv.GITHUB_STATUS_TOKEN
+      delete testEnv.GITHUB_CLIENT_ID
+      delete testEnv.GITHUB_CLIENT_SECRET
+      expect(() => assertSecureConfiguration(testEnv)).not.toThrow()
     })
 
     it('does nothing when the configuration is secure', () => {
