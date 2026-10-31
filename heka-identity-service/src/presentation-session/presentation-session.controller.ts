@@ -19,11 +19,16 @@ import { GithubAppStatusGuard } from 'gpg-challenge/github-app-status.guard'
 
 import {
   AttachCheckRunDto,
-  ClaimWebhookDeliveryDto,
   ClosePresentationSessionDto,
   CreatePresentationSessionDto,
+  UpdateWebhookJobDto,
+  UpsertWebhookJobDto,
 } from './dto/presentation-session.dto'
-import { GithubWebhookDeliveryService } from './github-webhook-delivery.service'
+import {
+  GithubWebhookDeliveryService,
+  type AbandonedWebhookJob,
+  type WebhookJobDecision,
+} from './github-webhook-delivery.service'
 import { PresentationSessionService, PresentationSessionView } from './presentation-session.service'
 
 @ApiTags('Presentation Session')
@@ -48,9 +53,25 @@ export class PresentationSessionController {
   @Post('deliveries')
   @HttpCode(HttpStatus.OK)
   @UseGuards(GithubAppStatusGuard)
-  @ApiOperation({ summary: 'Claim a GitHub webhook delivery id for ten minutes' })
-  public claim(@Body() body: ClaimWebhookDeliveryDto): Promise<{ claimed: boolean }> {
-    return this.deliveries.claim(body.deliveryId).then((claimed) => ({ claimed }))
+  @ApiOperation({ summary: 'Lease a webhook delivery. Completed only after the check is attached.' })
+  public acceptDelivery(@Body() body: UpsertWebhookJobDto): Promise<WebhookJobDecision> {
+    return this.deliveries.accept(body.deliveryId, body.event)
+  }
+
+  @Version('2')
+  @Get('deliveries/abandoned')
+  @UseGuards(GithubAppStatusGuard)
+  @ApiOperation({ summary: 'Lease webhook jobs whose worker stopped before the check was attached' })
+  public abandonedDeliveries(): Promise<{ jobs: AbandonedWebhookJob[] }> {
+    return this.deliveries.leaseAbandoned().then((jobs) => ({ jobs }))
+  }
+
+  @Version('2')
+  @Patch('deliveries/:deliveryId')
+  @UseGuards(GithubAppStatusGuard)
+  @ApiOperation({ summary: 'Store the check run id, or mark the job completed or failed' })
+  public updateDelivery(@Param('deliveryId') deliveryId: string, @Body() body: UpdateWebhookJobDto): Promise<void> {
+    return this.deliveries.update(deliveryId, body)
   }
 
   @Version('2')

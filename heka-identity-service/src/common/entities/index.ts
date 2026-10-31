@@ -2,6 +2,7 @@ import { ContributorAuditEvent } from 'contributor-onboarding/contributor-audit-
 import { ContributorBinding } from 'contributor-onboarding/contributor-binding.entity'
 import { OAuthLinkAttempt } from 'contributor-onboarding/oauth-link-attempt.entity'
 import { GpgChallenge } from 'gpg-challenge/gpg-challenge.entity'
+import { GithubWebhookDelivery } from 'presentation-session/github-webhook-delivery.entity'
 import { PresentationSession } from 'presentation-session/presentation-session.entity'
 
 import { CredentialStatusList } from './credential-status-list.entity'
@@ -39,6 +40,7 @@ export default [
   OAuthLinkAttempt,
   GpgChallenge,
   PresentationSession,
+  GithubWebhookDelivery,
   Schema,
   SchemaField,
   SchemaRegistration,

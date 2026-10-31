@@ -8,7 +8,8 @@ Each row names the automated test or says `manual`. There is no live Credo-to-He
 - Credential age is 90 days, not 15 minutes: `presentation-decision.spec.ts` — `accepts a credential issued minutes ago and rejects one older than 90 days`
 - Stale credential, rejected DID method, issuer outside the allow list: `presentation-decision.spec.ts` — `fails a stale credential, a rejected issuer method, and an issuer outside the allow list`
 - Concurrent open session: `presentation-session.service.spec.ts` — `returns the open session that won a concurrent insert`
-- Delivery id claim: `github-webhook-delivery.service.spec.ts` — `claims a delivery once inside the TTL and allows it again after expiry`
+- Delivery job lease: `github-webhook-delivery.service.spec.ts` — `leases a delivery once and resumes it only after the lease expires`
+- Restart resumes one check: GitHub App `test/webhook-job-store.test.ts` — `a restarted worker creates one check for an abandoned job`
 - Invalid policy on the verification page: `ContributorVerify.test.tsx` — `shows an invalid repository policy`
 - Fifteen-minute cover: `presentation-decision.spec.ts` — `covers another pull request inside 15 minutes and not after`
 - Reuse the open session: `presentation-session.service.spec.ts` — `reuses an open session for the same pull request and commit`
