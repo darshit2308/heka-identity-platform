@@ -3,8 +3,6 @@ import * as crypto from 'crypto'
 import {
   CanActivate,
   ExecutionContext,
-  HttpException,
-  HttpStatus,
   Inject,
   Injectable,
   ServiceUnavailableException,
@@ -13,6 +11,7 @@ import {
 import { ConfigType } from '@nestjs/config'
 import { Request } from 'express'
 
+import { consume } from 'common/http/fixed-window-rate-limit'
 import GithubConfig from 'config/github'
 
 const WINDOW_MS = 60_000
@@ -25,8 +24,6 @@ const MAX_REQUESTS_PER_WINDOW = 60
  */
 @Injectable()
 export class GithubAppStatusGuard implements CanActivate {
-  private readonly hits = new Map<string, { count: number; resetAt: number }>()
-
   public constructor(@Inject(GithubConfig.KEY) private readonly github: ConfigType<typeof GithubConfig>) {}
 
   public canActivate(context: ExecutionContext): boolean {
@@ -51,22 +48,6 @@ export class GithubAppStatusGuard implements CanActivate {
   }
 
   private assertRateLimit(caller: string): void {
-    const now = Date.now()
-    if (this.hits.size > 1_000) {
-      for (const [key, entry] of this.hits) {
-        if (entry.resetAt <= now) this.hits.delete(key)
-      }
-    }
-
-    const entry = this.hits.get(caller)
-    if (!entry || entry.resetAt <= now) {
-      this.hits.set(caller, { count: 1, resetAt: now + WINDOW_MS })
-      return
-    }
-
-    entry.count += 1
-    if (entry.count > MAX_REQUESTS_PER_WINDOW) {
-      throw new HttpException('Too many contributor status requests. Retry shortly.', HttpStatus.TOO_MANY_REQUESTS)
-    }
+    consume(`github-status:${caller}`, MAX_REQUESTS_PER_WINDOW, WINDOW_MS)
   }
 }

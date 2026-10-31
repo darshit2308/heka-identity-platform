@@ -1,6 +1,20 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards, Version } from '@nestjs/common'
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+  UseInterceptors,
+  Version,
+} from '@nestjs/common'
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger'
 
+import { ContributorRateLimit, ContributorRateLimitGuard } from 'common/http/contributor-rate-limit.guard'
+import { CorrelationIdInterceptor } from 'common/http/correlation-id.interceptor'
 import { GithubAppStatusGuard } from 'gpg-challenge/github-app-status.guard'
 
 import {
@@ -11,6 +25,7 @@ import {
 import { PresentationSessionService, PresentationSessionView } from './presentation-session.service'
 
 @ApiTags('Presentation Session')
+@UseInterceptors(CorrelationIdInterceptor)
 @Controller('presentation-session')
 export class PresentationSessionController {
   public constructor(private readonly sessions: PresentationSessionService) {}
@@ -46,6 +61,8 @@ export class PresentationSessionController {
 
   @Version('2')
   @Get(':sessionId')
+  @UseGuards(ContributorRateLimitGuard)
+  @ContributorRateLimit('poll')
   @ApiOperation({ summary: 'Poll a presentation session. The page uses this every two seconds.' })
   @ApiOkResponse({ description: 'Current session state' })
   public get(@Param('sessionId') sessionId: string): Promise<PresentationSessionView> {
@@ -54,6 +71,8 @@ export class PresentationSessionController {
 
   @Version('2')
   @Post(':sessionId/retry')
+  @UseGuards(ContributorRateLimitGuard)
+  @ContributorRateLimit('retry')
   @ApiOperation({ summary: 'Replace a failed or timed-out request without opening a new pull request' })
   public retry(@Param('sessionId') sessionId: string): Promise<PresentationSessionView> {
     return this.sessions.retry(sessionId)

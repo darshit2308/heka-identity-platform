@@ -16,6 +16,7 @@ import { AuthInfo, Role } from 'common/auth'
 import { Wallet } from 'common/entities'
 import AgentConfig from 'config/agent'
 import { ContributorOnboardingService, type VerifiedContributor } from 'contributor-onboarding'
+import { ContributorAuditEvent, ContributorAuditEventType } from 'contributor-onboarding/contributor-audit-event.entity'
 import { CredentialFormat } from 'openid4vc/issuer/dto/common/credential'
 import {
   OpenId4VcIssuersUpdateMetadataDto,
@@ -231,6 +232,16 @@ export class ContributorCredentialService implements OnApplicationBootstrap {
         'Failed to generate a transaction-code credential offer. The offer URI alone is not enough to issue this credential.',
       )
     }
+
+    const offered = new ContributorAuditEvent()
+    offered.eventType = ContributorAuditEventType.CredentialOffered
+    offered.userId = authInfo.userId
+    offered.tenantId = authInfo.tenantId
+    offered.walletId = authInfo.walletId
+    offered.githubAccountId = contributor.githubAccountId
+    offered.githubUsername = contributor.githubUsername
+    offered.metadata = { expiresAt: expiresAt.toISOString() }
+    this.em.persist(offered)
 
     this.logger.log(
       `Credential offer created for contributor @${contributor.githubUsername} (account ${contributor.githubAccountId})`,

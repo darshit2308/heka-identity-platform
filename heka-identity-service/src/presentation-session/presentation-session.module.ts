@@ -2,6 +2,7 @@ import { MikroOrmModule } from '@mikro-orm/nestjs'
 import { Module } from '@nestjs/common'
 
 import { AgentModule } from 'common/agent'
+import { ContributorRateLimitGuard } from 'common/http/contributor-rate-limit.guard'
 import { ContributorOnboardingModule } from 'contributor-onboarding/contributor-onboarding.module'
 import { GpgChallengeModule } from 'gpg-challenge/gpg-challenge.module'
 import { OpenId4VcVerificationSessionModule } from 'openid4vc/verification-sessions'
@@ -23,7 +24,7 @@ import { PresentationSessionService } from './presentation-session.service'
     ContributorOnboardingModule,
   ],
   controllers: [PresentationSessionController],
-  providers: [PresentationSessionService, GithubCheckNotifier, PolicyConfigProvider],
+  providers: [PresentationSessionService, GithubCheckNotifier, PolicyConfigProvider, ContributorRateLimitGuard],
   exports: [PresentationSessionService],
 })
 export class PresentationSessionModule {}

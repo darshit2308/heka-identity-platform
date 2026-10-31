@@ -7,6 +7,9 @@ export enum ContributorAuditEventType {
   ProofAccepted = 'ProofAccepted',
   ProofRejected = 'ProofRejected',
   BindingUpdated = 'BindingUpdated',
+  CredentialOffered = 'CredentialOffered',
+  PresentationSucceeded = 'PresentationSucceeded',
+  PresentationFailed = 'PresentationFailed',
 }
 
 @Entity({ tableName: 'contributor_onboarding_audit_events' })

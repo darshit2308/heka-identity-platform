@@ -2,6 +2,8 @@ import { MikroOrmModule } from '@mikro-orm/nestjs'
 import { HttpModule } from '@nestjs/axios'
 import { Module } from '@nestjs/common'
 
+import { ContributorRateLimitGuard } from 'common/http/contributor-rate-limit.guard'
+
 import { ContributorOnboardingModule } from '../contributor-onboarding'
 
 import { GithubAppStatusGuard } from './github-app-status.guard'
@@ -12,7 +14,7 @@ import { GpgChallengeService } from './gpg-challenge.service'
 @Module({
   imports: [MikroOrmModule.forFeature([GpgChallenge]), HttpModule, ContributorOnboardingModule],
   controllers: [GpgChallengeController],
-  providers: [GpgChallengeService, GithubAppStatusGuard],
+  providers: [GpgChallengeService, GithubAppStatusGuard, ContributorRateLimitGuard],
   exports: [GpgChallengeService, GithubAppStatusGuard],
 })
 export class GpgChallengeModule {}

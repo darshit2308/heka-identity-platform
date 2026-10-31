@@ -17,6 +17,7 @@ import { Wallet } from 'common/entities'
 import AgentConfig from 'config/agent'
 import PresentationSessionConfig from 'config/presentation-session'
 import { CONTRIBUTOR_CREDENTIAL_VCT } from 'contributor-credential/contributor-credential.constants'
+import { ContributorAuditEvent, ContributorAuditEventType } from 'contributor-onboarding/contributor-audit-event.entity'
 import { ContributorOnboardingService } from 'contributor-onboarding/contributor-onboarding.service'
 import { OpenId4VcVerificationSessionService } from 'openid4vc/verification-sessions/verification-session.service'
 import { OpenId4VcVerifierService } from 'openid4vc/verifier/verifier.service'
@@ -283,11 +284,15 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
       return
     }
     if (isResolverOutage(error) && session.policyMode === 'enforce') {
-      this.finish(session, {
-        outcome: 'failure',
-        failureReason: 'resolver_unavailable',
-        humanReason: humanReason('resolver_unavailable'),
-      })
+      this.finish(
+        session,
+        {
+          outcome: 'failure',
+          failureReason: 'resolver_unavailable',
+          humanReason: humanReason('resolver_unavailable'),
+        },
+        em,
+      )
       await em.flush()
       await this.notify(session)
       return
@@ -331,23 +336,53 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
           acceptedIssuerDidMethods: stored.acceptedIssuerDidMethods,
           requiredCredentials: stored.requiredCredentials,
         }),
+        em,
       )
     })
     await em.flush()
     if (!OPEN_STATES.includes(session.state)) await this.notify(session)
   }
 
-  private finish(session: PresentationSession, decision: ReturnType<typeof decidePresentation>): void {
+  private finish(
+    session: PresentationSession,
+    decision: ReturnType<typeof decidePresentation>,
+    em: EntityManager,
+  ): void {
     session.completedAt = new Date()
     session.humanReason = decision.humanReason
     session.warning = decision.warning ?? null
     if (decision.outcome === 'success') {
       session.state = PresentationSessionState.Success
       session.failureReason = null
-      return
+    } else {
+      session.state = PresentationSessionState.Failure
+      session.failureReason = decision.failureReason ?? 'invalid_vp'
     }
-    session.state = PresentationSessionState.Failure
-    session.failureReason = decision.failureReason ?? 'invalid_vp'
+    this.recordPresentationAudit(em, session, decision)
+  }
+
+  private recordPresentationAudit(
+    em: EntityManager,
+    session: PresentationSession,
+    decision: ReturnType<typeof decidePresentation>,
+  ): void {
+    const event = new ContributorAuditEvent()
+    event.eventType =
+      decision.outcome === 'success'
+        ? ContributorAuditEventType.PresentationSucceeded
+        : ContributorAuditEventType.PresentationFailed
+    event.userId = session.githubAccountId
+    event.tenantId = session.owner
+    event.githubAccountId = session.githubAccountId
+    event.githubUsername = session.githubUsername
+    event.metadata = {
+      failureReason: decision.failureReason,
+      warning: decision.warning,
+      owner: session.owner,
+      repo: session.repo,
+      prNumber: session.prNumber,
+    }
+    em.persist(event)
   }
 
   private markTimeout(session: PresentationSession, now: Date): void {

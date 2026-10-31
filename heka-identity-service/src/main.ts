@@ -4,7 +4,7 @@ import { AppModule } from './app.module'
 import { startApp } from './app.starter'
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true })
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, bodyParser: false })
   await startApp(app, { withSwaggerUi: true })
 }
 
