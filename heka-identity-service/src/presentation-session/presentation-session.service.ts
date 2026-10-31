@@ -164,6 +164,27 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
     return this.toView(session)
   }
 
+  public async closePullRequest(input: { owner: string; repo: string; prNumber: number }): Promise<{ closed: number }> {
+    const em = this.em.fork()
+    const open = await em.find(PresentationSession, {
+      owner: input.owner,
+      repo: input.repo,
+      prNumber: input.prNumber,
+      state: { $in: OPEN_STATES },
+    })
+    for (const session of open) {
+      session.state = PresentationSessionState.Failure
+      session.failureReason = 'pull_request_closed'
+      session.humanReason = humanReason('pull_request_closed')
+      session.completedAt = new Date()
+    }
+    if (open.length > 0) await em.flush()
+    for (const session of open) {
+      await this.notify(session, session.policyMode === 'enforce' ? 'failure' : 'neutral')
+    }
+    return { closed: open.length }
+  }
+
   public async attachCheckRun(sessionId: string, checkRunId: string): Promise<PresentationSessionView> {
     const em = this.em.fork()
     const session = await this.require(em, sessionId)
@@ -245,9 +266,33 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
     try {
       await this.applyVerifiedResponse(sessionId)
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Presentation reconcile failed'
-      this.logger.warn(message)
+      await this.handleReconcileError(sessionId, error)
     }
+  }
+
+  /**
+   * Credo already caches did:hedera. This method does not add a second DID cache,
+   * and GitHub account-id lookup stays uncached on purpose.
+   */
+  private async handleReconcileError(sessionId: string, error: unknown): Promise<void> {
+    const message = error instanceof Error ? error.message : 'Presentation reconcile failed'
+    const em = this.em.fork()
+    const session = await em.findOne(PresentationSession, { id: sessionId })
+    if (!session || !OPEN_STATES.includes(session.state)) {
+      this.logger.warn(this.sessionLog(sessionId, session, message))
+      return
+    }
+    if (isResolverOutage(error) && session.policyMode === 'enforce') {
+      this.finish(session, {
+        outcome: 'failure',
+        failureReason: 'resolver_unavailable',
+        humanReason: humanReason('resolver_unavailable'),
+      })
+      await em.flush()
+      await this.notify(session)
+      return
+    }
+    this.logger.warn(this.sessionLog(session.id, session, message))
   }
 
   private async applyVerifiedResponse(sessionId: string): Promise<void> {
@@ -362,7 +407,7 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
 
   private async notify(
     session: PresentationSession,
-    conclusion?: 'success' | 'failure' | 'action_required',
+    conclusion?: 'success' | 'failure' | 'action_required' | 'neutral',
   ): Promise<void> {
     if (!session.checkRunId) return
     const resolved =
@@ -384,8 +429,12 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
       })
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'GitHub check update failed'
-      this.logger.warn(message)
+      this.logger.warn(this.sessionLog(session.id, session, message))
     }
+  }
+
+  private sessionLog(sessionId: string, session: PresentationSession | null, message: string): string {
+    return `sessionId=${sessionId} owner=${session?.owner ?? ''} repo=${session?.repo ?? ''} prNumber=${session?.prNumber ?? ''} ${message}`
   }
 
   private async require(em: EntityManager, sessionId: string): Promise<PresentationSession> {
@@ -463,7 +512,21 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
   }
 }
 
+function isResolverOutage(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  const haystack = message.toLowerCase()
+  return (
+    haystack.includes('unable to resolve') ||
+    haystack.includes('resolver') ||
+    haystack.includes('hedera') ||
+    message.includes('ECONNREFUSED') ||
+    message.includes('ETIMEDOUT') ||
+    haystack.includes('fetch failed')
+  )
+}
+
 function checkTitle(state: PresentationSessionState, conclusion: string): string {
+  if (conclusion === 'neutral') return 'Contributor verification closed'
   if (conclusion === 'action_required') return 'Contributor verification required'
   if (state === PresentationSessionState.Success) return 'Contributor identity verified'
   if (state === PresentationSessionState.Timeout) return 'Contributor verification timed out'

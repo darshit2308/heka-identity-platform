@@ -1,3 +1,5 @@
+import { generateKeyPairSync } from 'crypto'
+
 import { OpenId4VcVerificationSessionState } from '@credo-ts/openid4vc'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -77,6 +79,28 @@ contributor_identity:
     enabled: ${options.grace ? 'true' : 'false'}
     days: 14
 `
+}
+
+function openSession(id: string, policyMode: string): PresentationSession {
+  return session({
+    id,
+    ...input,
+    state: PresentationSessionState.InProgress,
+    expiresAt: new Date('2026-10-30T12:30:00.000Z'),
+    verificationSessionId: 'credo-1',
+    checkRunId: '42',
+    policyMode,
+  })
+}
+
+function failingAgent(message: string) {
+  return {
+    modules: {
+      tenants: {
+        withTenantAgent: () => Promise.reject(new Error(message)),
+      },
+    },
+  }
 }
 
 function issuingSessions() {
@@ -309,6 +333,63 @@ describe('PresentationSessionService', () => {
     expect(view.disposition).toBe('verify')
     expect(sessions.verificationSessions.createRequest).toHaveBeenCalled()
   })
+
+  it('fails closed when enforce mode cannot resolve the issuer', async () => {
+    const open = openSession('sess-enforce', 'enforce')
+    await build([open], { tenantId: 'tenant-1', agent: failingAgent('Unable to resolve did:hedera') }).getForPage(
+      'sess-enforce',
+      new Date('2026-10-30T12:05:00.000Z'),
+    )
+    expect(open.state).toBe(PresentationSessionState.Failure)
+    expect(open.failureReason).toBe('resolver_unavailable')
+    expect(checks.update).toHaveBeenCalledWith(expect.objectContaining({ conclusion: 'failure', checkRunId: '42' }))
+  })
+
+  it('leaves a warn-mode session open when resolution fails', async () => {
+    const open = openSession('sess-warn', 'warn')
+    const view = await build([open], {
+      tenantId: 'tenant-1',
+      agent: failingAgent('Unable to resolve did:hedera'),
+    }).getForPage('sess-warn', new Date('2026-10-30T12:05:00.000Z'))
+    expect(view.state).toBe(PresentationSessionState.InProgress)
+    expect(checks.update).not.toHaveBeenCalled()
+  })
+
+  it('leaves an enforce-mode session open when the error is not a resolver outage', async () => {
+    const open = openSession('sess-other', 'enforce')
+    const view = await build([open], { tenantId: 'tenant-1', agent: failingAgent('query failed') }).getForPage(
+      'sess-other',
+      new Date('2026-10-30T12:05:00.000Z'),
+    )
+    expect(view.state).toBe(PresentationSessionState.InProgress)
+  })
+
+  it('closes every open session for a pull request', async () => {
+    const pending = openSession('open-1', 'enforce')
+    const finished = session({
+      id: 'done-1',
+      ...input,
+      state: PresentationSessionState.Success,
+      expiresAt: new Date('2026-10-30T12:30:00.000Z'),
+    })
+    const result = await build([pending, finished]).closePullRequest({
+      owner: input.owner,
+      repo: input.repo,
+      prNumber: input.prNumber,
+    })
+    expect(result.closed).toBe(1)
+    expect(pending.state).toBe(PresentationSessionState.Failure)
+    expect(pending.failureReason).toBe('pull_request_closed')
+    expect(pending.humanReason).toBe('The pull request was closed before verification finished.')
+    expect(finished.state).toBe(PresentationSessionState.Success)
+    expect(checks.update).toHaveBeenCalledWith(expect.objectContaining({ conclusion: 'failure', checkRunId: '42' }))
+  })
+
+  it('posts a neutral check when a warn-mode pull request is closed', async () => {
+    const pending = openSession('open-warn', 'warn')
+    await build([pending]).closePullRequest({ owner: input.owner, repo: input.repo, prNumber: input.prNumber })
+    expect(checks.update).toHaveBeenCalledWith(expect.objectContaining({ conclusion: 'neutral', checkRunId: '42' }))
+  })
 })
 
 describe('GithubCheckNotifier', () => {
@@ -331,5 +412,63 @@ describe('GithubCheckNotifier', () => {
       ),
     ).resolves.toBe(false)
     expect(http).not.toHaveBeenCalled()
+  })
+
+  it('retries a timed-out check update once', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
+    const pem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString()
+    const notifier = new GithubCheckNotifier({ githubAppId: '1', githubAppPrivateKey: pem } as never)
+    const timeout = new Error('timed out')
+    timeout.name = 'TimeoutError'
+    const http = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ token: 'installation-token' }) })
+      .mockRejectedValueOnce(timeout)
+      .mockResolvedValueOnce({ ok: true })
+
+    await expect(
+      notifier.update(
+        {
+          installationId: '2',
+          owner: 'test-org',
+          repo: 'test-repo',
+          checkRunId: '42',
+          conclusion: 'neutral',
+          title: 'Closed',
+          summary: 'The pull request was closed.',
+        },
+        http as never,
+      ),
+    ).resolves.toBe(true)
+    expect(http).toHaveBeenCalledTimes(3)
+    const patchInit = http.mock.calls[1]?.[1] as { signal?: AbortSignal }
+    expect(patchInit.signal).toBeInstanceOf(AbortSignal)
+    expect(http.mock.calls[2][0]).toContain('/check-runs/42')
+  })
+
+  it('does not retry a client error from GitHub', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
+    const pem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString()
+    const notifier = new GithubCheckNotifier({ githubAppId: '1', githubAppPrivateKey: pem } as never)
+    const http = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ token: 'installation-token' }) })
+      .mockResolvedValueOnce({ ok: false, status: 422 })
+
+    await expect(
+      notifier.update(
+        {
+          installationId: '2',
+          owner: 'test-org',
+          repo: 'test-repo',
+          checkRunId: '42',
+          conclusion: 'failure',
+          title: 'Failed',
+          summary: 'No.',
+        },
+        http as never,
+      ),
+    ).resolves.toBe(false)
+    expect(http).toHaveBeenCalledTimes(2)
   })
 })

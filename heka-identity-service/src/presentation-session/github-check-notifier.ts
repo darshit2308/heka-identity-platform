@@ -10,7 +10,7 @@ export interface GithubCheckUpdate {
   owner: string
   repo: string
   checkRunId: string
-  conclusion: 'success' | 'failure' | 'action_required'
+  conclusion: 'success' | 'failure' | 'action_required' | 'neutral'
   title: string
   summary: string
 }
@@ -31,29 +31,64 @@ export class GithubCheckNotifier {
       return false
     }
 
-    const token = await this.installationToken(githubAppId, githubAppPrivateKey, change.installationId, http)
-    const response = await http(
-      `https://api.github.com/repos/${change.owner}/${change.repo}/check-runs/${change.checkRunId}`,
-      {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/vnd.github+json',
-          'Content-Type': 'application/json',
-          'User-Agent': 'heka-identity-service',
-        },
-        body: JSON.stringify({
-          status: 'completed',
-          conclusion: change.conclusion,
-          output: { title: change.title, summary: change.summary },
-        }),
-      },
-    )
-    if (!response.ok) {
-      this.logger.warn(`GitHub check update failed with HTTP ${response.status}.`)
+    let token: string
+    try {
+      token = await this.installationToken(githubAppId, githubAppPrivateKey, change.installationId, http)
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'GitHub installation token request failed.'
+      this.logger.warn(message)
       return false
     }
-    return true
+    return this.patchCheck(change, token, http)
+  }
+
+  /** One retry on 502, 503, timeout, or a network TypeError. 4xx is not retried. The token is not cached. */
+  private async patchCheck(change: GithubCheckUpdate, token: string, http: typeof fetch): Promise<boolean> {
+    try {
+      const first = await this.sendCheckUpdate(change, token, http)
+      if (first.ok) return true
+      if (first.status !== 502 && first.status !== 503) {
+        this.logger.warn(`GitHub check update failed with HTTP ${first.status}.`)
+        return false
+      }
+    } catch (error: unknown) {
+      if (!isTransientCheckError(error)) {
+        const message = error instanceof Error ? error.message : 'GitHub check update failed.'
+        this.logger.warn(message)
+        return false
+      }
+    }
+
+    try {
+      const second = await this.sendCheckUpdate(change, token, http)
+      if (!second.ok) {
+        this.logger.warn(`GitHub check update failed with HTTP ${second.status}.`)
+        return false
+      }
+      return true
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'GitHub check update failed.'
+      this.logger.warn(message)
+      return false
+    }
+  }
+
+  private sendCheckUpdate(change: GithubCheckUpdate, token: string, http: typeof fetch): Promise<Response> {
+    return http(`https://api.github.com/repos/${change.owner}/${change.repo}/check-runs/${change.checkRunId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'heka-identity-service',
+      },
+      body: JSON.stringify({
+        status: 'completed',
+        conclusion: change.conclusion,
+        output: { title: change.title, summary: change.summary },
+      }),
+      signal: AbortSignal.timeout(8_000),
+    })
   }
 
   private async installationToken(
@@ -69,6 +104,7 @@ export class GithubCheckNotifier {
         Accept: 'application/vnd.github+json',
         'User-Agent': 'heka-identity-service',
       },
+      signal: AbortSignal.timeout(8_000),
     })
     if (!response.ok) {
       throw new Error(`GitHub installation token request failed with HTTP ${response.status}.`)
@@ -86,6 +122,10 @@ export function signAppJwt(appId: string, privateKeyPem: string, nowSeconds = Ma
   const signer = createSign('RSA-SHA256')
   signer.update(unsigned)
   return `${unsigned}.${base64Url(signer.sign(privateKeyPem))}`
+}
+
+function isTransientCheckError(error: unknown): boolean {
+  return error instanceof Error && (error.name === 'TimeoutError' || error.name === 'TypeError')
 }
 
 function base64Url(value: string | Buffer): string {
