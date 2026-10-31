@@ -1,4 +1,15 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, UseGuards, Version } from '@nestjs/common'
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  UseGuards,
+  UseInterceptors,
+  Version,
+} from '@nestjs/common'
 import {
   ApiBearerAuth,
   ApiNotFoundResponse,
@@ -14,12 +25,15 @@ import {
 
 import { AuthInfo, JwtAuthGuard, ReqAuthInfo } from 'common/auth'
 import { AnyRole, RoleGuard } from 'common/authz'
+import { ContributorRateLimit, ContributorRateLimitGuard } from 'common/http/contributor-rate-limit.guard'
+import { CorrelationIdInterceptor } from 'common/http/correlation-id.interceptor'
 
 import { GetStatusParamsDto, VerifySignatureDto } from './dto'
 import { GithubAppStatusGuard } from './github-app-status.guard'
 import { ContributorStatus, GpgChallengeService, VerificationResult } from './gpg-challenge.service'
 
 @ApiTags('GPG Challenge')
+@UseInterceptors(CorrelationIdInterceptor)
 @Controller('gpg-challenge')
 export class GpgChallengeController {
   public constructor(private readonly gpgChallengeService: GpgChallengeService) {}
@@ -29,7 +43,8 @@ export class GpgChallengeController {
   @HttpCode(HttpStatus.CREATED)
   @ApiBearerAuth()
   @ApiUnauthorizedResponse({ description: 'Unauthorized.' })
-  @UseGuards(JwtAuthGuard, RoleGuard)
+  @UseGuards(JwtAuthGuard, RoleGuard, ContributorRateLimitGuard)
+  @ContributorRateLimit('gpg')
   @AnyRole()
   @ApiOperation({
     summary: 'Request a GPG ownership challenge for the linked GitHub account',
@@ -59,7 +74,8 @@ export class GpgChallengeController {
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiUnauthorizedResponse({ description: 'Unauthorized.' })
-  @UseGuards(JwtAuthGuard, RoleGuard)
+  @UseGuards(JwtAuthGuard, RoleGuard, ContributorRateLimitGuard)
+  @ContributorRateLimit('gpg')
   @AnyRole()
   @ApiOperation({
     summary: 'Submit a GPG signature for verification',

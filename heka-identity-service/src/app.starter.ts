@@ -1,5 +1,3 @@
-import type { Express } from 'express'
-
 import fs from 'fs'
 
 import {
@@ -14,6 +12,7 @@ import { Reflector } from '@nestjs/core'
 import { WsAdapter } from '@nestjs/platform-ws'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import chalk from 'chalk'
+import { json, urlencoded, type Express } from 'express'
 import yaml from 'yaml'
 
 import { LoggerProvider } from 'common/logger'
@@ -115,6 +114,10 @@ const addSwagger = (app: INestApplication, appConfig: ConfigType<typeof ExpressC
 }
 
 export async function startApp(app: INestApplication, { withSwaggerUi }: { withSwaggerUi?: boolean } = {}) {
+  const expressInstance = app.getHttpAdapter().getInstance() as Express
+  expressInstance.use(json({ limit: '256kb' }))
+  expressInstance.use(urlencoded({ extended: true, limit: '256kb' }))
+
   const appVersion = getPackageVersion()
   const expressConfig = app.get<ConfigType<typeof ExpressConfig>>(ExpressConfig.KEY)
 
@@ -141,7 +144,6 @@ export async function startApp(app: INestApplication, { withSwaggerUi }: { withS
   // Mapping them to `undefined` here drops them and preserves current API behavior.
   // Dates are unaffected (their `toJSON` runs before this replacer).
   // TODO: Revisit this global null-stripping behavior and decide whether the API should instead expose explicit `null` for empty fields.
-  const expressInstance = app.getHttpAdapter().getInstance() as Express
   expressInstance.set('json replacer', (_key: string, value: unknown) => (value === null ? undefined : value))
 
   if (expressConfig.prefix) {
