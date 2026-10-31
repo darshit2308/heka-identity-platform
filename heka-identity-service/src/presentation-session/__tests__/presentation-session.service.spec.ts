@@ -1,4 +1,7 @@
+import { OpenId4VcVerificationSessionState } from '@credo-ts/openid4vc'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { CONTRIBUTOR_CREDENTIAL_VCT } from 'contributor-credential/contributor-credential.constants'
 
 import { GithubCheckNotifier } from '../github-check-notifier'
 import { PresentationSession, PresentationSessionState } from '../presentation-session.entity'
@@ -21,10 +24,15 @@ function matches(row: PresentationSession, where: Record<string, unknown>): bool
   })
 }
 
-function memory(rows: PresentationSession[]) {
+function memory(rows: PresentationSession[], tenantId?: string) {
   const api = {
     fork: () => api,
-    findOne: (_entity: unknown, where: Record<string, unknown>, options?: { orderBy?: { completedAt?: 'DESC' } }) => {
+    findOne: (
+      entity: { name?: string },
+      where: Record<string, unknown>,
+      options?: { orderBy?: { completedAt?: 'DESC' } },
+    ) => {
+      if (entity?.name === 'Wallet') return Promise.resolve(tenantId ? { tenantId } : null)
       const found = rows.filter((row) => matches(row, where))
       if (options?.orderBy?.completedAt === 'DESC') {
         found.sort((left, right) => (right.completedAt?.getTime() ?? 0) - (left.completedAt?.getTime() ?? 0))
@@ -116,6 +124,68 @@ describe('PresentationSessionService', () => {
     expect(open.state).toBe(PresentationSessionState.Timeout)
     expect(open.failureReason).toBe('session_expired')
     expect(checks.update).toHaveBeenCalledWith(expect.objectContaining({ checkRunId: '42', conclusion: 'failure' }))
+  })
+
+  it('records a verified presentation during the sweep when the page is closed', async () => {
+    const issuer = 'did:hedera:testnet:issuer'
+    const open = session({
+      ...input,
+      state: PresentationSessionState.InProgress,
+      checkRunId: '42',
+      verificationSessionId: 'credo-session',
+      trustedIssuerDid: issuer,
+      expiresAt: new Date('2026-10-30T12:20:00.000Z'),
+    })
+    const verificationSessions = {
+      getVerificationSession: vi.fn().mockResolvedValue({ state: OpenId4VcVerificationSessionState.ResponseVerified }),
+    }
+    const agent = {
+      modules: {
+        tenants: {
+          withTenantAgent: async (_query: unknown, callback: (tenantAgent: unknown) => Promise<void>) => {
+            await callback({
+              openid4vc: {
+                verifier: {
+                  getVerifiedAuthorizationResponse: () =>
+                    Promise.resolve({
+                      dcql: {
+                        presentations: {
+                          credential: [
+                            {
+                              prettyClaims: {
+                                vct: CONTRIBUTOR_CREDENTIAL_VCT,
+                                iss: issuer,
+                                githubAccountId: input.githubAccountId,
+                                exp: 4_000_000_000,
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    }),
+                },
+              },
+            })
+          },
+        },
+      },
+    }
+    const service = new PresentationSessionService(
+      memory([open], 'tenant-1') as never,
+      agent as never,
+      { contributorIssuerDemoUser: 'demo' } as never,
+      { pageBaseUrl: 'http://localhost:8000' } as never,
+      verificationSessions as never,
+      {} as never,
+      checks as never,
+      { mode: () => 'warn' } as never,
+    )
+
+    await service.sweep(new Date('2026-10-30T12:05:00.000Z'))
+
+    expect(open.state).toBe(PresentationSessionState.Success)
+    expect(open.failureReason).toBeNull()
+    expect(checks.update).toHaveBeenCalledWith(expect.objectContaining({ checkRunId: '42', conclusion: 'success' }))
   })
 })
 

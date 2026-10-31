@@ -30,7 +30,6 @@ import {
   PRESENTATION_SESSION_TTL_MS,
   recentSuccessCovers,
 } from './presentation-decision'
-import PresentationSessionConfig from './presentation-session.config'
 import { PresentationSession, PresentationSessionState } from './presentation-session.entity'
 
 const OPEN_STATES = [PresentationSessionState.Pending, PresentationSessionState.InProgress]
@@ -184,16 +183,19 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
 
   public async sweep(now = new Date()): Promise<number> {
     const em = this.em.fork()
-    const due = await em.find(PresentationSession, {
-      state: { $in: OPEN_STATES },
-      expiresAt: { $lt: now },
-    })
-    for (const session of due) {
-      this.markTimeout(session, now)
-      await this.notify(session)
+    const open = await em.find(PresentationSession, { state: { $in: OPEN_STATES } })
+    let timedOut = 0
+    for (const session of open) {
+      if (session.expiresAt <= now) {
+        this.markTimeout(session, now)
+        await this.notify(session)
+        timedOut += 1
+        continue
+      }
+      await this.reconcileVerified(session.id)
     }
-    if (due.length > 0) await em.flush()
-    return due.length
+    if (timedOut > 0) await em.flush()
+    return timedOut
   }
 
   private async markOpened(sessionId: string): Promise<void> {
@@ -214,6 +216,15 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
   }
 
   private async reconcileVerified(sessionId: string): Promise<void> {
+    try {
+      await this.applyVerifiedResponse(sessionId)
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Presentation reconcile failed'
+      this.logger.warn(message)
+    }
+  }
+
+  private async applyVerifiedResponse(sessionId: string): Promise<void> {
     const em = this.em.fork()
     const session = await em.findOne(PresentationSession, { id: sessionId })
     if (!session?.verificationSessionId || !OPEN_STATES.includes(session.state)) return
