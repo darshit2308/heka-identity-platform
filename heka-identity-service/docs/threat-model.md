@@ -36,7 +36,7 @@ Implemented. A GPG challenge is single-use, expires after 5 minutes, and is boun
 
 ## Webhook replay
 
-Implemented. Probot checks the webhook signature. The App stores each delivery as a job (`pending`, `processing`, `completed`, or `failed`) and deduplicates on the delivery id. The job becomes `completed` only after the check run is created and attached. A `processing` job whose lease has expired is resumed on App startup, because GitHub will not redeliver an event it already accepted. The identity-service table is the cross-process record. The App also keeps a local job file so a process restart can resume work. This is still one active worker; it is not a multi-instance outbox. One open session per pull request and commit is enforced by the unique index `presentation_sessions_one_open_per_commit`.
+Implemented. Probot checks the webhook signature. The App stores each delivery as a job (`pending`, `processing`, `completed`, or `failed`) and deduplicates on the delivery id. The job becomes `completed` only after the check run is created and attached, and the local journal is marked completed only after the identity service accepts that completion. A `processing` job whose lease has expired is resumed by a timer in the running App, and again when the process starts, because GitHub will not redeliver an event it already accepted. The identity-service table is the cross-process record. The App also keeps a local job file so a process restart can resume work. Terminal rows are not pruned. This is still one active worker; it is not a multi-instance outbox. One open session per pull request and commit is enforced by the unique index `presentation_sessions_one_open_per_commit`.
 
 ## Issuer or operator key compromise
 

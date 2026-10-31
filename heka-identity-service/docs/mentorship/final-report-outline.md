@@ -24,7 +24,8 @@ Point at `docs/mentorship/deliverable-map.md`. Leave the live-demo column empty.
 - No Linked VP.
 - No third-party wallet. Sphereon is out of scope.
 - Rate limits are in memory, per process.
-- Webhook jobs are resumed after a lease expires. This is not a multi-instance outbox.
+- Webhook jobs are resumed by a timer after a lease expires, including while the App stays up. This is not a multi-instance outbox.
+- Terminal webhook jobs are kept indefinitely in Postgres and in the App journal. A 30-day retention prune is not implemented. This is a prototype limitation.
 
 ## Post-mentorship roadmap
 

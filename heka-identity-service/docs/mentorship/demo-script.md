@@ -11,6 +11,6 @@ The web UI routes are `ROUTES.SIGN_IN` (`/sign-in`), `ROUTES.CONTRIBUTOR_ONBOARD
 5. **Warn-mode pull request.** On a test repository, put `heka-identity-service/docs/examples/heka-config-warn.yml` on the default branch as `.heka/config.yml`. Open a pull request. Screenshot the Action Required check named `Heka Identity Verification` and its details URL.
 6. **Present.** Open the details page. The extension presents from `wallet.html`. Screenshot the check moving to success.
 7. **Enforce-mode failure.** Change the default-branch config to `heka-identity-service/docs/examples/heka-config-enforce.yml` with a trusted issuer that will not match the credential, or present a credential whose `exp` is in the past. Push a commit. Screenshot the failure code on the check (`issuer_untrusted` or `credential_expired`).
-8. **Timeout.** Open a new pull request and do not present. Wait 15 minutes, or run one sweep of open sessions. Screenshot the timeout check (`session_expired`).
+8. **Timeout.** Open a new pull request and do not present. Leave the identity service running and wait 15 minutes. Screenshot the timeout check (`session_expired`). There is no operator command that runs one sweep.
 
 The recording link stays empty until you publish it. See the final report outline.

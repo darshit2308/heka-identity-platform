@@ -10,6 +10,8 @@ Each row names the automated test or says `manual`. There is no live Credo-to-He
 - Concurrent open session: `presentation-session.service.spec.ts` — `returns the open session that won a concurrent insert`
 - Delivery job lease: `github-webhook-delivery.service.spec.ts` — `leases a delivery once and resumes it only after the lease expires`
 - Restart resumes one check: GitHub App `test/webhook-job-store.test.ts` — `a restarted worker creates one check for an abandoned job`
+- Same process retries a failed attach: GitHub App `test/webhook-job-store.test.ts` — `a running worker retries a failed attach after the lease without creating another check`
+- Remote completion is required: GitHub App `test/webhook-job-store.test.ts` — `remote finish fails, App restarts, job resolves without a duplicate check`
 - Invalid policy on the verification page: `ContributorVerify.test.tsx` — `shows an invalid repository policy`
 - Fifteen-minute cover: `presentation-decision.spec.ts` — `covers another pull request inside 15 minutes and not after`
 - Reuse the open session: `presentation-session.service.spec.ts` — `reuses an open session for the same pull request and commit`
