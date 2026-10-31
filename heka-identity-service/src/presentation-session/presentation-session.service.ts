@@ -34,6 +34,7 @@ import {
 } from './presentation-decision'
 import { PresentationSession, PresentationSessionState } from './presentation-session.entity'
 import { DEFAULT_POLICY, type ResolvedPolicy } from './repository-policy'
+import { isUniqueViolation } from './unique-violation'
 
 const OPEN_STATES = [PresentationSessionState.Pending, PresentationSessionState.InProgress]
 
@@ -160,9 +161,7 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
     session.authorizationRequestUri = offer.authorizationRequestUri
     session.verificationSessionId = offer.verificationSessionId
     session.trustedIssuerDid = offer.trustedIssuerDid
-    em.persist(session)
-    await em.flush()
-    return this.toView(session)
+    return this.insertOpen(em, session, now)
   }
 
   public async closePullRequest(input: { owner: string; repo: string; prNumber: number }): Promise<{ closed: number }> {
@@ -224,7 +223,12 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
     session.satisfiedBySessionId = null
     session.completedAt = null
     session.expiresAt = new Date(now.getTime() + PRESENTATION_SESSION_TTL_MS)
-    await em.flush()
+    try {
+      await em.flush()
+    } catch (error: unknown) {
+      if (!isUniqueViolation(error)) throw error
+      throw new ConflictException('An open verification session already exists for this pull request.')
+    }
     await this.notify(session, 'action_required')
     return this.toView(session)
   }
@@ -466,6 +470,29 @@ export class PresentationSessionService implements OnModuleInit, OnModuleDestroy
       const message = error instanceof Error ? error.message : 'GitHub check update failed'
       this.logger.warn(this.sessionLog(session.id, session, message))
     }
+  }
+
+  private async insertOpen(
+    em: EntityManager,
+    session: PresentationSession,
+    now: Date,
+  ): Promise<PresentationSessionView> {
+    em.persist(session)
+    try {
+      await em.flush()
+    } catch (error: unknown) {
+      if (!isUniqueViolation(error)) throw error
+      const winner = await this.em.fork().findOne(PresentationSession, {
+        owner: session.owner,
+        repo: session.repo,
+        prNumber: session.prNumber,
+        headSha: session.headSha,
+        state: { $in: OPEN_STATES },
+      })
+      if (winner && winner.expiresAt > now) return this.toView(winner)
+      throw error
+    }
+    return this.toView(session)
   }
 
   private sessionLog(sessionId: string, session: PresentationSession | null, message: string): string {

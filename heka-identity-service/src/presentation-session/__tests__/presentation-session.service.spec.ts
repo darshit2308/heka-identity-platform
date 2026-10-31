@@ -1,6 +1,7 @@
 import { generateKeyPairSync } from 'crypto'
 
 import { OpenId4VcVerificationSessionState } from '@credo-ts/openid4vc'
+import { UniqueConstraintViolationException } from '@mikro-orm/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CONTRIBUTOR_CREDENTIAL_VCT } from 'contributor-credential/contributor-credential.constants'
@@ -169,6 +170,48 @@ describe('PresentationSessionService', () => {
 
     expect(view.sessionId).toBe(open.id)
     expect(rows).toHaveLength(1)
+  })
+
+  it('returns the open session that won a concurrent insert', async () => {
+    const winner = session({
+      id: 'winner',
+      ...input,
+      state: PresentationSessionState.Pending,
+      expiresAt: new Date('2026-10-30T12:20:00.000Z'),
+      authorizationRequestUri: 'openid4vp://existing',
+    })
+    let openLookups = 0
+    const em = {
+      fork: () => em,
+      findOne: (entity: { name?: string }, where: { state?: { $in?: string[] } }) => {
+        if (entity?.name === 'Wallet') return Promise.resolve({ tenantId: 'tenant-1' })
+        if (where.state?.$in) {
+          openLookups += 1
+          return Promise.resolve(openLookups === 1 ? null : winner)
+        }
+        return Promise.resolve(null)
+      },
+      find: () => Promise.resolve([]),
+      persist: () => undefined,
+      flush: () => Promise.reject(new UniqueConstraintViolationException(new Error('duplicate'))),
+    }
+    const sessions = issuingSessions()
+    const service = new PresentationSessionService(
+      em as never,
+      sessions.agent as never,
+      { contributorIssuerDemoUser: 'demo' } as never,
+      { pageBaseUrl: 'http://localhost:8000' } as never,
+      sessions.verificationSessions as never,
+      sessions.verifiers,
+      checks as never,
+      new PolicyConfigProvider(),
+      { findVerifiedBindingByGithubAccountId: () => Promise.resolve(undefined) } as never,
+    )
+
+    const view = await service.create(input, new Date('2026-10-30T12:00:00.000Z'))
+
+    expect(view.sessionId).toBe('winner')
+    expect(view.authorizationRequestUri).toBe('openid4vp://existing')
   })
 
   it('closes a new pull request when the same account presented within 15 minutes', async () => {

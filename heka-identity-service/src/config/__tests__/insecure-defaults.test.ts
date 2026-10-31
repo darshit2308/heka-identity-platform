@@ -162,7 +162,7 @@ describe('insecure defaults', () => {
       expect(() =>
         assertSecureConfiguration({ ...secureEnv, NODE_ENV: 'production', GITHUB_STATUS_TOKEN: '' }),
       ).toThrow(/GITHUB_STATUS_TOKEN/)
-      const testEnv = { ...secureEnv, NODE_ENV: 'test' }
+      const testEnv: Record<string, string> = { ...secureEnv, NODE_ENV: 'test' }
       delete testEnv.GITHUB_STATUS_TOKEN
       delete testEnv.GITHUB_CLIENT_ID
       delete testEnv.GITHUB_CLIENT_SECRET

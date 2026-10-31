@@ -4,7 +4,7 @@ Each item from the mentorship security list is either implemented in this reposi
 
 ## GitHub App private key
 
-Implemented as an environment secret. `GITHUB_APP_PRIVATE_KEY` is read by the check notifier and is not required at startup, because the notifier no-ops when it is unset. Do not commit a live key. The copy tracked in the GitHub App repository should be rotated in the GitHub App settings. History was not rewritten.
+Implemented as an environment secret. `GITHUB_APP_PRIVATE_KEY` is read by the check notifier and is not required at startup, because the notifier no-ops when it is unset. The GitHub App loads `PRIVATE_KEY` from the environment and refuses `PRIVATE_KEY_PATH` when it points inside that repository. `private-key.pem` is no longer in the tree. The copy that was committed is still in git history, so revoke it in the GitHub App settings. History was not rewritten.
 
 ## GPG key compromise
 
@@ -36,7 +36,7 @@ Implemented. A GPG challenge is single-use, expires after 5 minutes, and is boun
 
 ## Webhook replay
 
-Implemented in the GitHub App. Probot checks the webhook signature. `delivery-memory.ts` ignores a delivery id for 10 minutes, in that process only, with no Redis.
+Implemented. Probot checks the webhook signature. The App stores each delivery as a job (`pending`, `processing`, `completed`, or `failed`) and deduplicates on the delivery id. The job becomes `completed` only after the check run is created and attached, and the local journal is marked completed only after the identity service accepts that completion. A `processing` job whose lease has expired is resumed by a timer in the running App, and again when the process starts, because GitHub will not redeliver an event it already accepted. The identity-service table is the cross-process record. The App also keeps a local job file so a process restart can resume work. Terminal rows are not pruned. This is still one active worker; it is not a multi-instance outbox. One open session per pull request and commit is enforced by the unique index `presentation_sessions_one_open_per_commit`.
 
 ## Issuer or operator key compromise
 
@@ -48,7 +48,7 @@ Implemented. Check updates time out after 8 seconds and retry once on 502, 503, 
 
 ## Repository config tampering
 
-Implemented. The GitHub App reads `.heka/config.yml` from `repository.default_branch` only. A file that exists only on the pull request head is ignored. Invalid YAML falls back to warn with `repository_config_invalid`.
+Implemented. The GitHub App reads `.heka/config.yml` from `repository.default_branch` only. A file that exists only on the pull request head is ignored. Invalid YAML falls back to warn with `repository_config_invalid`. That warning is written on the GitHub check and on the verification page.
 
 ## Privacy leakage
 
