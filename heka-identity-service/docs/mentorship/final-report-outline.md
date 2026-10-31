@@ -23,7 +23,8 @@ Point at `docs/mentorship/deliverable-map.md`. Leave the live-demo column empty.
 - No status-list client. Expiry is 90 days.
 - No Linked VP.
 - No third-party wallet. Sphereon is out of scope.
-- Rate limits and the webhook delivery-id map are in memory, per process.
+- Rate limits are in memory, per process.
+- Webhook delivery ids are stored for 10 minutes. A crash after the claim can suppress one retry until that row expires. This is not a multi-instance outbox.
 
 ## Post-mentorship roadmap
 

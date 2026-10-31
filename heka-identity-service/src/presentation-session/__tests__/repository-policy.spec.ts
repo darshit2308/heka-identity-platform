@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { CONTRIBUTOR_CREDENTIAL_LIFETIME_SECONDS } from 'contributor-credential/contributor-credential.constants'
+
 import { resolveRepositoryPolicy } from '../repository-policy'
 
 const valid = `
@@ -28,6 +30,7 @@ describe('resolveRepositoryPolicy', () => {
     expect(policy.mode).toBe('warn')
     expect(policy.configWarning).toBeUndefined()
     expect(policy.graceEnabled).toBe(false)
+    expect(policy.maxAgeSeconds).toBe(CONTRIBUTOR_CREDENTIAL_LIFETIME_SECONDS)
   })
 
   it('reads a valid document and ignores linked_vp', () => {

@@ -19,16 +19,21 @@ import { GithubAppStatusGuard } from 'gpg-challenge/github-app-status.guard'
 
 import {
   AttachCheckRunDto,
+  ClaimWebhookDeliveryDto,
   ClosePresentationSessionDto,
   CreatePresentationSessionDto,
 } from './dto/presentation-session.dto'
+import { GithubWebhookDeliveryService } from './github-webhook-delivery.service'
 import { PresentationSessionService, PresentationSessionView } from './presentation-session.service'
 
 @ApiTags('Presentation Session')
 @UseInterceptors(CorrelationIdInterceptor)
 @Controller('presentation-session')
 export class PresentationSessionController {
-  public constructor(private readonly sessions: PresentationSessionService) {}
+  public constructor(
+    private readonly sessions: PresentationSessionService,
+    private readonly deliveries: GithubWebhookDeliveryService,
+  ) {}
 
   @Version('2')
   @Post()
@@ -37,6 +42,15 @@ export class PresentationSessionController {
   @ApiOperation({ summary: 'Open an OID4VP session for a pull request' })
   public create(@Body() body: CreatePresentationSessionDto): Promise<PresentationSessionView> {
     return this.sessions.create(body)
+  }
+
+  @Version('2')
+  @Post('deliveries')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(GithubAppStatusGuard)
+  @ApiOperation({ summary: 'Claim a GitHub webhook delivery id for ten minutes' })
+  public claim(@Body() body: ClaimWebhookDeliveryDto): Promise<{ claimed: boolean }> {
+    return this.deliveries.claim(body.deliveryId).then((claimed) => ({ claimed }))
   }
 
   @Version('2')

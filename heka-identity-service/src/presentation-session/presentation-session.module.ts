@@ -9,6 +9,8 @@ import { OpenId4VcVerificationSessionModule } from 'openid4vc/verification-sessi
 import { OpenId4VcVerifierModule } from 'openid4vc/verifier/verifier.module'
 
 import { GithubCheckNotifier } from './github-check-notifier'
+import { GithubWebhookDelivery } from './github-webhook-delivery.entity'
+import { GithubWebhookDeliveryService } from './github-webhook-delivery.service'
 import { PolicyConfigProvider } from './policy-config.provider'
 import { PresentationSessionController } from './presentation-session.controller'
 import { PresentationSession } from './presentation-session.entity'
@@ -17,14 +19,20 @@ import { PresentationSessionService } from './presentation-session.service'
 @Module({
   imports: [
     AgentModule,
-    MikroOrmModule.forFeature([PresentationSession]),
+    MikroOrmModule.forFeature([PresentationSession, GithubWebhookDelivery]),
     OpenId4VcVerificationSessionModule,
     OpenId4VcVerifierModule,
     GpgChallengeModule,
     ContributorOnboardingModule,
   ],
   controllers: [PresentationSessionController],
-  providers: [PresentationSessionService, GithubCheckNotifier, PolicyConfigProvider, ContributorRateLimitGuard],
+  providers: [
+    PresentationSessionService,
+    GithubWebhookDeliveryService,
+    GithubCheckNotifier,
+    PolicyConfigProvider,
+    ContributorRateLimitGuard,
+  ],
   exports: [PresentationSessionService],
 })
 export class PresentationSessionModule {}

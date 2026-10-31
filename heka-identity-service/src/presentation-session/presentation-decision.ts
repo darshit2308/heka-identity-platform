@@ -1,4 +1,7 @@
-import { CONTRIBUTOR_CREDENTIAL_VCT } from 'contributor-credential/contributor-credential.constants'
+import {
+  CONTRIBUTOR_CREDENTIAL_LIFETIME_SECONDS,
+  CONTRIBUTOR_CREDENTIAL_VCT,
+} from 'contributor-credential/contributor-credential.constants'
 
 /** How long a pull-request verification session stays open. */
 export const PRESENTATION_SESSION_TTL_MS = 15 * 60 * 1000
@@ -107,7 +110,9 @@ export function decidePresentation(input: {
   const exp = claims.exp
   if (typeof exp !== 'number' || !Number.isFinite(exp) || exp <= input.nowSeconds) return failure('credential_expired')
 
-  const maxAge = input.maxAgeSeconds ?? 900
+  // Credential age since iat. A missing iat does not fail this check.
+  // Presentation freshness is the 15-minute session, not this value.
+  const maxAge = input.maxAgeSeconds ?? CONTRIBUTOR_CREDENTIAL_LIFETIME_SECONDS
   const issuedAt = claims.iat
   if (typeof issuedAt === 'number' && Number.isFinite(issuedAt) && input.nowSeconds - issuedAt > maxAge) {
     return failure('credential_stale')
